@@ -1,0 +1,9 @@
+{
+  "sources": [
+    { "id": "serpapi", "name": "Google Shopping", "type": "api", "enabled": true },
+    { "id": "ebay", "name": "eBay", "type": "api", "enabled": false },
+    { "id": "mcmaster", "name": "McMaster-Carr", "type": "scrape", "enabled": true },
+    { "id": "partstown", "name": "Parts Town", "type": "scrape", "enabled": true },
+    { "id": "grainger", "name": "Grainger", "type": "scrape", "enabled": false }
+  ]
+}
