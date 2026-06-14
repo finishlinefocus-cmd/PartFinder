@@ -1,6 +1,8 @@
 {
   "sources": [
+    { "id": "bigquery", "name": "BigQuery Inventory", "type": "warehouse", "enabled": false },
     { "id": "serpapi", "name": "Google Shopping", "type": "api", "enabled": true },
+    { "id": "apify", "name": "Apify Scrapers", "type": "scrape", "enabled": false },
     { "id": "ebay", "name": "eBay", "type": "api", "enabled": false },
     { "id": "mcmaster", "name": "McMaster-Carr", "type": "scrape", "enabled": true },
     { "id": "partstown", "name": "Parts Town", "type": "scrape", "enabled": true },

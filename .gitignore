@@ -1,6 +1,7 @@
+logs/
+client/dist/
 node_modules/
 client/node_modules/
 .env
-dist/
 .DS_Store
 *.save
