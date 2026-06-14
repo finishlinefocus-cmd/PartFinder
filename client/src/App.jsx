@@ -21,6 +21,10 @@ export default function App() {
   const [refreshingAutomaticsMore, setRefreshingAutomaticsMore] = useState(false);
   const [refreshingConnected, setRefreshingConnected] = useState(false);
   const [catalogError, setCatalogError] = useState('');
+  const [selectedVendorId, setSelectedVendorId] = useState('');
+  const [vendorItemSearch, setVendorItemSearch] = useState('');
+  const [openCats, setOpenCats] = useState(() => new Set());
+  const [showEmptyVendors, setShowEmptyVendors] = useState(false);
 
   useEffect(() => {
     loadDistributors();
@@ -159,6 +163,68 @@ export default function App() {
     ].some(value => String(value || '').toLowerCase().includes(needle)));
   }, [distributors, distributorSearch]);
 
+  // Index every catalog item by distributor -> category, so a vendor's items
+  // become a browsable set of category groups instead of one endless table.
+  const vendorIndex = useMemo(() => {
+    const map = {};
+    for (const it of catalogItems) {
+      const vid = it.distributorId || it.distributor || 'unknown';
+      if (!map[vid]) map[vid] = { id: vid, name: it.distributor || vid, count: 0, categories: {} };
+      map[vid].count += 1;
+      const cat = (it.category && String(it.category).trim()) || 'Uncategorized';
+      (map[vid].categories[cat] = map[vid].categories[cat] || []).push(it);
+    }
+    return map;
+  }, [catalogItems]);
+
+  // Master vendor list (from /api/distributors) split into "has data" vs "empty",
+  // with live counts preferred from the loaded catalog. Data vendors sort by size.
+  const vendorCount = (d) => vendorIndex[d.id]?.count ?? d.itemCount ?? 0;
+  const dataVendors = useMemo(() => {
+    const needle = distributorSearch.trim().toLowerCase();
+    return distributors
+      .filter(d => vendorCount(d) > 0)
+      .filter(d => !needle || String(d.name || '').toLowerCase().includes(needle))
+      .sort((a, b) => vendorCount(b) - vendorCount(a));
+  }, [distributors, vendorIndex, distributorSearch]);
+  const emptyVendors = useMemo(
+    () => distributors.filter(d => vendorCount(d) === 0).sort((a, b) => String(a.name).localeCompare(String(b.name))),
+    [distributors, vendorIndex]
+  );
+
+  const selectedVendor = useMemo(
+    () => distributors.find(d => d.id === selectedVendorId) || null,
+    [distributors, selectedVendorId]
+  );
+
+  // Categories of the selected vendor, sorted largest-first, filtered by the
+  // within-vendor search box. When searching, only matching items/categories show.
+  const selectedCategories = useMemo(() => {
+    if (!selectedVendorId) return [];
+    const entry = vendorIndex[selectedVendorId];
+    if (!entry) return [];
+    const needle = vendorItemSearch.trim().toLowerCase();
+    const match = (it) => !needle || [it.description, it.addisonPart, it.manufacturerPart, it.category, it.condition]
+      .some(v => String(v || '').toLowerCase().includes(needle));
+    return Object.entries(entry.categories)
+      .map(([name, items]) => ({ name, items: needle ? items.filter(match) : items }))
+      .filter(g => g.items.length > 0)
+      .sort((a, b) => b.items.length - a.items.length);
+  }, [selectedVendorId, vendorIndex, vendorItemSearch]);
+
+  function selectVendor(id) {
+    setSelectedVendorId(id);
+    setVendorItemSearch('');
+    setOpenCats(new Set());
+  }
+  function toggleCat(name) {
+    setOpenCats(prev => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name); else next.add(name);
+      return next;
+    });
+  }
+
   const styles = {
     wrap: { maxWidth: 1100, margin: '0 auto', padding: '2rem 1rem', fontFamily: 'system-ui, sans-serif', color: '#222' },
     header: { fontSize: 28, fontWeight: 600, marginBottom: 4, letterSpacing: '-0.5px' },
@@ -194,6 +260,16 @@ export default function App() {
     catalogThumbEmpty: { width: 64, height: 64, background: '#f7f7f7', border: '1px solid #eee', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#aaa', fontSize: 10 },
     priceCell: { fontWeight: 800, color: '#185FA5', whiteSpace: 'nowrap' },
     priceNote: { fontSize: 11, color: '#777', marginTop: 3, whiteSpace: 'nowrap' },
+    vendorGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10, marginTop: 12 },
+    vendorCard: { textAlign: 'left', border: '1px solid #e5e5e5', borderRadius: 10, padding: '12px 14px', background: '#fff', cursor: 'pointer', transition: 'all .12s' },
+    vendorCardActive: { borderColor: '#185FA5', background: '#F2F8FE', boxShadow: '0 0 0 1px #185FA5 inset' },
+    vendorName: { fontWeight: 700, fontSize: 14, marginBottom: 2 },
+    vendorMeta: { fontSize: 12, color: '#777' },
+    catHeader: { width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, padding: '11px 14px', border: '1px solid #e5e5e5', borderRadius: 10, background: '#fafafa', cursor: 'pointer', fontWeight: 700, fontSize: 14, marginTop: 8 },
+    catCount: { fontSize: 12, fontWeight: 700, color: '#185FA5', background: '#E6F1FB', borderRadius: 20, padding: '2px 10px' },
+    catItem: { display: 'grid', gridTemplateColumns: '52px 1fr auto', gap: 12, alignItems: 'center', padding: '8px 10px', borderBottom: '1px solid #f0f0f0' },
+    catItemThumb: { width: 52, height: 52, objectFit: 'contain', background: '#f7f7f7', border: '1px solid #eee', borderRadius: 6 },
+    pill: { fontSize: 12, fontWeight: 700, padding: '4px 10px', borderRadius: 20, border: '1px solid #ddd', background: '#fff', cursor: 'pointer' },
   };
 
   const sortBtnStyle = (active) => ({ fontSize: 12, padding: '5px 12px', border: '1px solid #ddd', borderRadius: 20, background: active ? '#E6F1FB' : '#fff', color: active ? '#185FA5' : '#666', cursor: 'pointer' });
@@ -285,11 +361,12 @@ export default function App() {
       {activeTab === 'distributors' && (
         <>
           <div style={styles.card}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', marginBottom: 14 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', flexWrap: 'wrap', marginBottom: 6 }}>
               <div>
-                <div style={{ fontWeight: 700, marginBottom: 4 }}>Managed distributor catalogs</div>
+                <div style={{ fontWeight: 700, marginBottom: 4 }}>Distributor catalogs</div>
                 <div style={{ color: '#666', fontSize: 12 }}>
-                  {catalogUpdatedAt ? 'Last refreshed ' + new Date(catalogUpdatedAt).toLocaleString() : 'No catalog refresh has been saved yet.'}
+                  {catalogUpdatedAt ? 'Last refreshed ' + new Date(catalogUpdatedAt).toLocaleString() : 'No catalog refresh saved yet.'}
+                  {' · '}{dataVendors.length} with data · {emptyVendors.length} empty
                 </div>
               </div>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
@@ -299,105 +376,122 @@ export default function App() {
                 <button style={styles.secondaryButton} onClick={refreshAutomaticsAndMore} disabled={refreshingAutomaticsMore || !!refreshingDistributor}>
                   {refreshingAutomaticsMore ? 'Refreshing A&M...' : 'Refresh A&M categories'}
                 </button>
-                <button style={styles.secondaryButton} onClick={() => loadCatalog()} disabled={catalogLoading}>
-                  {catalogLoading ? 'Loading...' : 'Reload table'}
+                <button style={styles.secondaryButton} onClick={() => loadCatalog('')} disabled={catalogLoading}>
+                  {catalogLoading ? 'Loading...' : 'Reload'}
                 </button>
               </div>
             </div>
-            <div style={{ marginBottom: 12 }}>
-              <label style={styles.label}>Search distributors</label>
-              <input
-                style={styles.input}
-                value={distributorSearch}
-                onChange={e => setDistributorSearch(e.target.value)}
-                placeholder="e.g. Horton, BEA, Service Spring, door controls"
-              />
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 8 }}>
+              <div>
+                <label style={styles.label}>Jump to a distributor</label>
+                <select style={styles.input} value={selectedVendorId} onChange={e => selectVendor(e.target.value)}>
+                  <option value="">Select a distributor…</option>
+                  {dataVendors.map(d => (
+                    <option key={d.id} value={d.id}>{d.name} ({vendorCount(d).toLocaleString()})</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label style={styles.label}>Filter distributors</label>
+                <input style={styles.input} value={distributorSearch} onChange={e => setDistributorSearch(e.target.value)} placeholder="e.g. Addison, Stanley, BEA" />
+              </div>
             </div>
-            <div style={{ display: 'grid', gap: 10 }}>
-              {filteredDistributors.length === 0 ? (
-                <div style={{ color: '#999', fontSize: 13, padding: '12px 2px' }}>No distributors match “{distributorSearch}”.</div>
-              ) : filteredDistributors.map(d => (
-                <div key={d.id} style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 12, alignItems: 'center', border: '1px solid #eee', borderRadius: 10, padding: 12 }}>
-                  <div>
-                    <div style={{ fontWeight: 700 }}>{d.name}</div>
-                    <div style={{ color: '#666', fontSize: 12 }}>{d.website}</div>
-                    <div style={{ color: '#666', fontSize: 12, marginTop: 4 }}>{d.itemCount || catalogStats[d.name] || 0} saved items · {d.categories?.length || 0} categories</div>
-                    <span style={connectionBadgeStyle(d.connection)}>{d.connection?.label || (d.connected ? 'Connected' : 'Not connected')}</span>
-                    <div style={{ color: d.connection?.needsStrongerConnection ? '#8A5A00' : '#2F6F3E', fontSize: 12, marginTop: 6 }}>{d.connection?.clue || d.notes}</div>
-                  </div>
-                  <div style={{ display: 'grid', gap: 8 }}>
-                    <a href={d.searchUrl || d.website} target="_blank" rel="noreferrer" style={styles.linkButton}>Open source</a>
-                    <button style={styles.secondaryButton} onClick={() => refreshDistributor(d.id)} disabled={!!refreshingDistributor || refreshingConnected}>
-                      {refreshingDistributor === d.id ? 'Refreshing...' : 'Refresh catalog'}
-                    </button>
-                  </div>
-                </div>
+
+            <div style={styles.vendorGrid}>
+              {dataVendors.length === 0 ? (
+                <div style={{ color: '#999', fontSize: 13 }}>No distributors with saved data{distributorSearch ? ' match your filter.' : ' yet — run a refresh.'}</div>
+              ) : dataVendors.map(d => (
+                <button key={d.id} onClick={() => selectVendor(d.id)} style={{ ...styles.vendorCard, ...(selectedVendorId === d.id ? styles.vendorCardActive : {}) }}>
+                  <div style={styles.vendorName}>{d.name}</div>
+                  <div style={styles.vendorMeta}>{vendorCount(d).toLocaleString()} items · {Object.keys(vendorIndex[d.id]?.categories || {}).length} categories</div>
+                </button>
               ))}
             </div>
+
+            {emptyVendors.length > 0 && (
+              <div style={{ marginTop: 14 }}>
+                <button style={{ ...styles.pill, background: '#fafafa' }} onClick={() => setShowEmptyVendors(v => !v)}>
+                  {showEmptyVendors ? '▾' : '▸'} Not yet populated ({emptyVendors.length})
+                </button>
+                {showEmptyVendors && (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 8, marginTop: 10 }}>
+                    {emptyVendors.map(d => (
+                      <div key={d.id} style={{ border: '1px solid #eee', borderRadius: 8, padding: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontWeight: 600, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.name}</div>
+                          <div style={{ fontSize: 11, color: '#999' }}>no items yet</div>
+                        </div>
+                        <button style={styles.pill} onClick={() => refreshDistributor(d.id)} disabled={!!refreshingDistributor || refreshingConnected}>
+                          {refreshingDistributor === d.id ? '…' : 'Refresh'}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {catalogError && <div style={styles.error}>{catalogError}</div>}
 
-          <div style={styles.card}>
-            <div style={styles.row}>
-              <div>
-                <label style={styles.label}>Search saved catalog</label>
-                <input
-                  style={styles.input}
-                  value={catalogSearch}
-                  onChange={e => setCatalogSearch(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && loadCatalog(catalogSearch)}
-                  placeholder="e.g. Horton 2160, RC4160, BEA"
-                />
+          {selectedVendor && (
+            <div style={styles.card}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
+                <div>
+                  <div style={{ fontWeight: 800, fontSize: 18 }}>{selectedVendor.name}</div>
+                  <div style={{ color: '#666', fontSize: 12 }}>{vendorCount(selectedVendor).toLocaleString()} items · {selectedCategories.length} categories{vendorItemSearch ? ' matching' : ''}</div>
+                </div>
+                <button style={styles.pill} onClick={() => selectVendor('')}>✕ Close</button>
               </div>
-              <div style={{ display: 'flex', alignItems: 'end', gap: 8 }}>
-                <button style={{ ...styles.secondaryButton, height: 36 }} onClick={() => loadCatalog(catalogSearch)} disabled={catalogLoading}>Search table</button>
-                <button style={{ ...styles.secondaryButton, height: 36 }} onClick={() => { setCatalogSearch(''); loadCatalog(''); }} disabled={catalogLoading}>Clear</button>
+              <input style={styles.input} value={vendorItemSearch} onChange={e => setVendorItemSearch(e.target.value)} placeholder={`Search within ${selectedVendor.name}… (part #, description, category)`} />
+
+              <div style={{ marginTop: 10 }}>
+                {selectedCategories.length === 0 ? (
+                  <div style={{ color: '#999', fontSize: 13, padding: '10px 2px' }}>No items{vendorItemSearch ? ` match “${vendorItemSearch}”.` : '.'}</div>
+                ) : selectedCategories.map(group => {
+                  const isOpen = openCats.has(group.name) || !!vendorItemSearch;
+                  return (
+                    <div key={group.name}>
+                      <button style={styles.catHeader} onClick={() => toggleCat(group.name)}>
+                        <span>{isOpen ? '▾' : '▸'} {group.name}</span>
+                        <span style={styles.catCount}>{group.items.length}</span>
+                      </button>
+                      {isOpen && (
+                        <div style={{ border: '1px solid #eee', borderTop: 'none', borderRadius: '0 0 10px 10px' }}>
+                          {group.items.map(item => (
+                            <div key={item.id} style={styles.catItem}>
+                              {item.thumbnail || item.image ? (
+                                <a href={item.image || item.thumbnail} target="_blank" rel="noreferrer" title="Open full-size image">
+                                  <img src={item.thumbnail || item.image} alt={item.description || item.addisonPart} style={styles.catItemThumb} />
+                                </a>
+                              ) : (
+                                <div style={{ ...styles.catItemThumb, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#bbb', fontSize: 10 }}>no image</div>
+                              )}
+                              <div style={{ minWidth: 0 }}>
+                                <div style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.3 }}>{item.description || '—'}</div>
+                                <div style={{ fontSize: 12, color: '#777', marginTop: 2 }}>
+                                  Part <strong>{item.addisonPart || '—'}</strong>{item.manufacturerPart ? ` · Mfg ${item.manufacturerPart}` : ''}{item.condition ? ` · ${item.condition}` : ''}
+                                </div>
+                              </div>
+                              <div style={{ textAlign: 'right' }}>
+                                <div style={styles.priceCell}>{item.price ? '$' + Number(item.price).toFixed(2) : (item.priceLabel || '—')}</div>
+                                {item.link && <a href={item.link} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: '#185FA5' }}>source ↗</a>}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
-          </div>
+          )}
 
-          <div style={styles.tableWrap}>
-            <table style={styles.table}>
-              <thead>
-                <tr>
-                  <th style={styles.th}>Image</th>
-                  <th style={styles.th}>Price</th>
-                  <th style={styles.th}>Distributor</th>
-                  <th style={styles.th}>Category</th>
-                  <th style={styles.th}>Part #</th>
-                  <th style={styles.th}>Mfg #</th>
-                  <th style={styles.th}>Description</th>
-                </tr>
-              </thead>
-              <tbody>
-                {catalogItems.length === 0 ? (
-                  <tr><td style={styles.td} colSpan="7">{catalogLoading ? 'Loading catalog...' : 'No saved catalog rows yet.'}</td></tr>
-                ) : catalogItems.map(item => (
-                  <tr key={item.id}>
-                    <td style={styles.td}>
-                      {item.thumbnail || item.image ? (
-                        <a href={item.image || item.thumbnail} target="_blank" rel="noreferrer" title="Open full-size image">
-                          <img src={item.thumbnail || item.image} alt={item.description || item.addisonPart} style={styles.catalogThumb} />
-                        </a>
-                      ) : (
-                        <div style={styles.catalogThumbEmpty}>no image</div>
-                      )}
-                    </td>
-                    <td style={styles.td}>
-                      <div style={styles.priceCell}>{item.price ? '$' + Number(item.price).toFixed(2) : item.priceLabel || '—'}</div>
-                      {!item.price && item.priceLabel && <div style={styles.priceNote}>Addison login required</div>}
-                    </td>
-                    <td style={styles.td}>{item.distributor}</td>
-                    <td style={styles.td}>{item.category}</td>
-                    <td style={styles.td}><strong>{item.addisonPart}</strong></td>
-                    <td style={styles.td}>{item.manufacturerPart || '—'}</td>
-                    <td style={styles.td}>{item.description}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          {!selectedVendor && dataVendors.length > 0 && (
+            <div style={styles.empty}>Pick a distributor above to browse its catalog by category.</div>
+          )}
         </>
       )}
     </div>
