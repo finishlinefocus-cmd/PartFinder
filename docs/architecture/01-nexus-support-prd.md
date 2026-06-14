@@ -160,6 +160,8 @@ Nexus should not give FieldCam raw access to every ticket or integration. It sho
 | `PartRequest` | Need for part identification, cross-reference, quote, PO, or availability. |
 | `SalesMetricSnapshot` | Sales demand, trend, customer, product, and vendor insight snapshot. |
 | `MarketingMetricSnapshot` | Campaign, attribution, channel, and demand snapshot. |
+| `Mailbox` | An email account Nexus syncs: kind (shared/personal), address, owner/team, IMAP/SMTP config ref, and sync watermark. |
+| `MailboxMembership` | User ↔ mailbox link with role; governs visibility and send-as rights. Tickets/threads carry `mailboxId`; outbound messages carry `sentAsMailboxId`. |
 
 ## Required Functional Areas
 
@@ -169,6 +171,44 @@ Nexus should not give FieldCam raw access to every ticket or integration. It sho
 - Filter by source system, object type, owner, date, status, and customer/site/contact.
 - Mark external state as requested, mirrored, confirmed, stale, failed, or manual.
 - Store audit metadata for important state changes.
+
+### Email Accounts, Mailboxes & Send-As
+
+Nexus must run more than one email account at once: a shared team-mailbox model **plus** a personal mailbox per user. Today there is a single shared mailbox; this is a required upgrade, not an optional one.
+
+**Account model**
+
+- Two mailbox kinds: **shared mailboxes** (e.g. `cs@`, `sales@`) owned by a team/lane, and **personal mailboxes** (e.g. `sterling@`) owned by one user.
+- Each mailbox carries its own IMAP/SMTP credentials, sync watermark (`lastSeenUid`), and inbox/folder partition. Credentials are encrypted at rest.
+- A user may be a member of one or more shared mailboxes and may own at most one personal mailbox.
+
+**Sidebar / navigation**
+
+- Each mailbox renders as its **own folder tree** in the left sidebar (separate sections) — e.g. a "Customer Service (cs@)" tree and a "Sterling (sterling@)" tree, each with its own Inbox and folders.
+- Personal and shared trees are visually separated. A user only sees trees for mailboxes they own or are a member of.
+
+**Send-as (changeable From)**
+
+- Every reply and every new message has a **From selector** the user can change per message.
+- Default From = the mailbox the thread belongs to: a reply in `cs@` defaults to sending as `cs@`; a reply in `sterling@` defaults to `sterling@`. The user can override — e.g. while working a `cs@` thread, choose to reply **as `sterling@`**, and vice-versa.
+- A user may only send as mailboxes they own or are a member of. The chosen From determines the SMTP account, the `From` / `Reply-To` headers, and the signature.
+- The outbound copy is filed in the **sending** mailbox's Sent folder and linked back to the originating ticket/thread regardless of which mailbox the inbound landed in.
+
+**Visibility & permissions**
+
+- Personal-mailbox mail is private to its owner (plus admins/owners). Shared-mailbox mail is visible to that mailbox's team/lane.
+- Threads, search, and the customer timeline respect mailbox visibility — personal mail does not surface in shared views unless explicitly linked to a shared ticket.
+
+**Sync & threading**
+
+- Each mailbox syncs independently with its own watermark and single-flight guard so concurrent syncs do not collide.
+- Threading and dedup are scoped per mailbox; a given inbound message belongs to exactly one mailbox.
+
+**Acceptance**
+
+- A user working the `cs@` inbox can reply and switch the From to their personal address; the message goes out via the correct SMTP account and is filed in that account's Sent.
+- `cs@` and the personal mailbox appear as separate folder trees in the sidebar, and a user cannot see another user's personal mailbox.
+- Each mailbox imports only its own new mail (independent watermarks); no duplicate tickets across mailboxes.
 
 ### Intake And Routing
 
