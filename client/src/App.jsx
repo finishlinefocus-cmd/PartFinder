@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import * as XLSX from 'xlsx';
 
 // Catalog category names follow a "<COMPANY> <TYPE>" pattern (e.g. "BESAM CONTROLS",
 // "DORMA PARTS", "HORTON OPER/MTR", "STANLEY NEW"). Split a category into the company
@@ -108,9 +109,23 @@ export default function App() {
     setImportError('');
     setImportResult(null);
     const reader = new FileReader();
-    reader.onload = () => setImportCsvText(String(reader.result || ''));
     reader.onerror = () => setImportError('Could not read that file.');
-    reader.readAsText(file);
+    if (/\.(xlsx|xls)$/i.test(file.name)) {
+      // Excel: parse the workbook and convert the first sheet to CSV, then import as usual.
+      reader.onload = () => {
+        try {
+          const wb = XLSX.read(new Uint8Array(reader.result), { type: 'array' });
+          const sheet = wb.Sheets[wb.SheetNames[0]];
+          setImportCsvText(XLSX.utils.sheet_to_csv(sheet));
+        } catch (err) {
+          setImportError('Could not read that Excel file: ' + (err.message || err));
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    } else {
+      reader.onload = () => setImportCsvText(String(reader.result || ''));
+      reader.readAsText(file);
+    }
   }
   async function runImport() {
     if (!importTarget) return;
@@ -623,14 +638,15 @@ export default function App() {
             </div>
 
             <div style={{ background: '#F7FAFE', border: '1px solid #E2EDF8', borderRadius: 8, padding: '10px 12px', fontSize: 12, color: '#456', marginBottom: 14, lineHeight: 1.5 }}>
-              Upload the CSV the distributor sent (Excel → <em>Save As → CSV</em>). The first row must be column headers.
-              Recognized columns: <strong>Part Number</strong> (required), Description, Price, Category, Manufacturer&nbsp;Part, Condition, Image, Link.
+              Upload the file the distributor sent — <strong>Excel (.xlsx/.xls)</strong> or CSV/TSV. The first row must be
+              column headers. Recognized columns: <strong>Part Number</strong> (required), Description, Price, Category,
+              Manufacturer&nbsp;Part, Condition, Image, Link. (For multi-tab workbooks, the first sheet is used.)
               <br />Matching parts are <strong>updated</strong>, new parts are <strong>added</strong>, and anything already in our
               catalog that isn’t in this file <strong>stays</strong> — nothing is deleted.
             </div>
 
-            <label style={styles.label}>Price list file (.csv, .tsv, .txt)</label>
-            <input type="file" accept=".csv,.tsv,.txt,text/csv,text/plain" onChange={onImportFile} style={{ marginBottom: 6 }} />
+            <label style={styles.label}>Price list file (.xlsx, .xls, .csv, .tsv, .txt)</label>
+            <input type="file" accept=".xlsx,.xls,.csv,.tsv,.txt,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv,text/plain" onChange={onImportFile} style={{ marginBottom: 6 }} />
             {importFileName && <div style={{ fontSize: 12, color: '#185FA5', marginBottom: 8 }}>{importFileName} · {importCsvText ? importCsvText.split(/\r?\n/).filter(Boolean).length + ' lines' : 'reading…'}</div>}
 
             <label style={{ ...styles.label, marginTop: 6 }}>Or paste rows</label>
