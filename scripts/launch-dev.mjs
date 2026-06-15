@@ -7,13 +7,13 @@ const services = [
     name: 'api',
     command: npmCommand,
     args: ['run', 'dev:api'],
-    url: `http://localhost:${process.env.PORT || 4001}`,
+    url: `http://localhost:${process.env.PORT || 4810}`,
   },
   {
     name: 'client',
     command: npmCommand,
     args: ['--prefix', 'client', 'run', 'dev', '--', '--host', '0.0.0.0'],
-    url: 'http://localhost:5173',
+    url: 'http://localhost:4811',
   },
 ];
 

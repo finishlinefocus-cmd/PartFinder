@@ -1828,6 +1828,18 @@ app.get('/api/search', async (req, res) => {
   res.json({ results, count: results.length, query: q });
 });
 
-app.listen(PORT, '0.0.0.0', () => {
+const partfinderServer = app.listen(PORT, '0.0.0.0', () => {
   console.log(`PartFinder server running on port ${PORT}`);
+});
+// Fail loudly (and clearly) if the port is already taken instead of crashing obscurely.
+partfinderServer.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.error(`\n✗ PartFinder cannot start: port ${PORT} is already in use.`);
+    console.error(`  Find the process with:  lsof -nP -iTCP:${PORT} -sTCP:LISTEN   (mac)`);
+    console.error(`                          netstat -ano | findstr :${PORT}        (windows)`);
+    console.error(`  Stop it, or change PORT in .env, then restart.\n`);
+  } else {
+    console.error(`✗ PartFinder failed to bind port ${PORT}:`, err.message);
+  }
+  process.exit(1);
 });
