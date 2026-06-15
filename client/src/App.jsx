@@ -1,5 +1,20 @@
 import React, { useEffect, useMemo, useState } from 'react';
 
+// Catalog category names follow a "<COMPANY> <TYPE>" pattern (e.g. "BESAM CONTROLS",
+// "DORMA PARTS", "HORTON OPER/MTR", "STANLEY NEW"). Split a category into the company
+// it belongs to and the part-type sub-category so the tree can nest one under the other.
+const CATEGORY_TYPES = ['CONTROLS', 'OPER/MTR', 'PARTS', 'NEW'];
+function splitCategory(rawName) {
+  const name = String(rawName || '').trim();
+  const upper = name.toUpperCase();
+  for (const type of CATEGORY_TYPES) {
+    if (upper.endsWith(' ' + type) && upper.length > type.length + 1) {
+      return { company: name.slice(0, name.length - type.length - 1).trim(), sub: type };
+    }
+  }
+  return { company: name || 'Uncategorized', sub: '' };
+}
+
 export default function App() {
   const [activeTab, setActiveTab] = useState('search');
   const [query, setQuery] = useState('');
@@ -25,6 +40,14 @@ export default function App() {
   const [vendorItemSearch, setVendorItemSearch] = useState('');
   const [openCats, setOpenCats] = useState(() => new Set());
   const [showEmptyVendors, setShowEmptyVendors] = useState(false);
+  // Price-list import (any user can upload a distributor's updated parts/price list).
+  const [importTarget, setImportTarget] = useState('');
+  const [importCsvText, setImportCsvText] = useState('');
+  const [importFileName, setImportFileName] = useState('');
+  const [importDefaultCategory, setImportDefaultCategory] = useState('');
+  const [importBusy, setImportBusy] = useState(false);
+  const [importResult, setImportResult] = useState(null);
+  const [importError, setImportError] = useState('');
 
   useEffect(() => {
     loadDistributors();
@@ -68,6 +91,49 @@ export default function App() {
       setCatalogError('Refresh failed: ' + err.message);
     }
     setRefreshingDistributor('');
+  }
+
+  function openImport(id) {
+    setImportTarget(id);
+    setImportCsvText('');
+    setImportFileName('');
+    setImportDefaultCategory('');
+    setImportResult(null);
+    setImportError('');
+  }
+  function onImportFile(e) {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    setImportFileName(file.name);
+    setImportError('');
+    setImportResult(null);
+    const reader = new FileReader();
+    reader.onload = () => setImportCsvText(String(reader.result || ''));
+    reader.onerror = () => setImportError('Could not read that file.');
+    reader.readAsText(file);
+  }
+  async function runImport() {
+    if (!importTarget) return;
+    if (!importCsvText.trim()) { setImportError('Choose a CSV file or paste rows first.'); return; }
+    setImportBusy(true);
+    setImportError('');
+    setImportResult(null);
+    try {
+      const res = await fetch('/api/distributors/' + encodeURIComponent(importTarget) + '/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ csv: importCsvText, defaultCategory: importDefaultCategory.trim() || undefined }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setImportError(data.error || 'Import failed.'); setImportBusy(false); return; }
+      setImportResult(data);
+      await loadDistributors();
+      await loadCatalog('');
+      selectVendor(importTarget);
+    } catch (err) {
+      setImportError('Could not reach the server.');
+    }
+    setImportBusy(false);
   }
 
   async function refreshAutomaticsAndMore() {
@@ -212,6 +278,21 @@ export default function App() {
       .sort((a, b) => b.items.length - a.items.length);
   }, [selectedVendorId, vendorIndex, vendorItemSearch]);
 
+  // Nest the flat categories under their company: Company → Sub-category (part type) → items.
+  // A company with only a general (typeless) category renders its items directly.
+  const selectedCompanies = useMemo(() => {
+    const companies = {};
+    for (const group of selectedCategories) {
+      const { company, sub } = splitCategory(group.name);
+      if (!companies[company]) companies[company] = { name: company, count: 0, subs: [] };
+      companies[company].subs.push({ name: sub || company, isGeneral: !sub, items: group.items });
+      companies[company].count += group.items.length;
+    }
+    return Object.values(companies)
+      .map(c => ({ ...c, subs: c.subs.slice().sort((a, b) => b.items.length - a.items.length) }))
+      .sort((a, b) => b.count - a.count);
+  }, [selectedCategories]);
+
   function selectVendor(id) {
     setSelectedVendorId(id);
     setVendorItemSearch('');
@@ -266,6 +347,9 @@ export default function App() {
     vendorName: { fontWeight: 700, fontSize: 14, marginBottom: 2 },
     vendorMeta: { fontSize: 12, color: '#777' },
     catHeader: { width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, padding: '11px 14px', border: '1px solid #e5e5e5', borderRadius: 10, background: '#fafafa', cursor: 'pointer', fontWeight: 700, fontSize: 14, marginTop: 8 },
+    subCatHeader: { width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, padding: '8px 12px', border: '1px solid #eee', borderRadius: 8, background: '#fff', cursor: 'pointer', fontWeight: 600, fontSize: 13, marginTop: 6 },
+    modalOverlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '6vh 16px', zIndex: 1000, overflowY: 'auto' },
+    modalCard: { background: '#fff', borderRadius: 14, padding: 22, width: '100%', maxWidth: 560, boxShadow: '0 20px 60px rgba(0,0,0,0.3)' },
     catCount: { fontSize: 12, fontWeight: 700, color: '#185FA5', background: '#E6F1FB', borderRadius: 20, padding: '2px 10px' },
     catItem: { display: 'grid', gridTemplateColumns: '52px 1fr auto', gap: 12, alignItems: 'center', padding: '8px 10px', borderBottom: '1px solid #f0f0f0' },
     catItemThumb: { width: 52, height: 52, objectFit: 'contain', background: '#f7f7f7', border: '1px solid #eee', borderRadius: 6 },
@@ -279,6 +363,34 @@ export default function App() {
     if (level === 'page-index' || level === 'category-index') return { ...styles.connectionBadge, background: '#FFF4D6', color: '#8A5A00' };
     return { ...styles.connectionBadge, background: '#FCEBEB', color: '#A32D2D' };
   };
+
+  // Shared renderer for a list of catalog item rows (used at company level when there
+  // is only a general sub-category, and within each part-type sub-category otherwise).
+  const renderItems = (items) => (
+    <div style={{ border: '1px solid #eee', borderTop: 'none', borderRadius: '0 0 10px 10px' }}>
+      {items.map(item => (
+        <div key={item.id} style={styles.catItem}>
+          {item.thumbnail || item.image ? (
+            <a href={item.image || item.thumbnail} target="_blank" rel="noreferrer" title="Open full-size image">
+              <img src={item.thumbnail || item.image} alt={item.description || item.addisonPart} style={styles.catItemThumb} />
+            </a>
+          ) : (
+            <div style={{ ...styles.catItemThumb, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#bbb', fontSize: 10 }}>no image</div>
+          )}
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.3 }}>{item.description || '—'}</div>
+            <div style={{ fontSize: 12, color: '#777', marginTop: 2 }}>
+              Part <strong>{item.addisonPart || '—'}</strong>{item.manufacturerPart ? ` · Mfg ${item.manufacturerPart}` : ''}{item.condition ? ` · ${item.condition}` : ''}
+            </div>
+          </div>
+          <div style={{ textAlign: 'right' }}>
+            <div style={styles.priceCell}>{item.price ? '$' + Number(item.price).toFixed(2) : (item.priceLabel || '—')}</div>
+            {item.link && <a href={item.link} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: '#185FA5' }}>source ↗</a>}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
 
   return (
     <div style={styles.wrap}>
@@ -422,9 +534,12 @@ export default function App() {
                           <div style={{ fontWeight: 600, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.name}</div>
                           <div style={{ fontSize: 11, color: '#999' }}>no items yet</div>
                         </div>
-                        <button style={styles.pill} onClick={() => refreshDistributor(d.id)} disabled={!!refreshingDistributor || refreshingConnected}>
-                          {refreshingDistributor === d.id ? '…' : 'Refresh'}
-                        </button>
+                        <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                          <button style={{ ...styles.pill, background: '#E6F1FB', color: '#185FA5', borderColor: '#BcdcF5' }} onClick={() => openImport(d.id)}>⬆ Price list</button>
+                          <button style={styles.pill} onClick={() => refreshDistributor(d.id)} disabled={!!refreshingDistributor || refreshingConnected}>
+                            {refreshingDistributor === d.id ? '…' : 'Refresh'}
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -440,47 +555,48 @@ export default function App() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
                 <div>
                   <div style={{ fontWeight: 800, fontSize: 18 }}>{selectedVendor.name}</div>
-                  <div style={{ color: '#666', fontSize: 12 }}>{vendorCount(selectedVendor).toLocaleString()} items · {selectedCategories.length} categories{vendorItemSearch ? ' matching' : ''}</div>
+                  <div style={{ color: '#666', fontSize: 12 }}>{vendorCount(selectedVendor).toLocaleString()} items · {selectedCompanies.length} companies · {selectedCategories.length} categories{vendorItemSearch ? ' matching' : ''}</div>
                 </div>
-                <button style={styles.pill} onClick={() => selectVendor('')}>✕ Close</button>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <button style={{ ...styles.pill, background: '#E6F1FB', color: '#185FA5', borderColor: '#BcdcF5' }} onClick={() => openImport(selectedVendor.id)}>⬆ Update price list</button>
+                  <button style={styles.pill} onClick={() => selectVendor('')}>✕ Close</button>
+                </div>
               </div>
               <input style={styles.input} value={vendorItemSearch} onChange={e => setVendorItemSearch(e.target.value)} placeholder={`Search within ${selectedVendor.name}… (part #, description, category)`} />
 
               <div style={{ marginTop: 10 }}>
-                {selectedCategories.length === 0 ? (
+                {selectedCompanies.length === 0 ? (
                   <div style={{ color: '#999', fontSize: 13, padding: '10px 2px' }}>No items{vendorItemSearch ? ` match “${vendorItemSearch}”.` : '.'}</div>
-                ) : selectedCategories.map(group => {
-                  const isOpen = openCats.has(group.name) || !!vendorItemSearch;
+                ) : selectedCompanies.map(company => {
+                  const companyKey = 'co:' + company.name;
+                  const companyOpen = openCats.has(companyKey) || !!vendorItemSearch;
+                  const singleGeneral = company.subs.length === 1 && company.subs[0].isGeneral;
                   return (
-                    <div key={group.name}>
-                      <button style={styles.catHeader} onClick={() => toggleCat(group.name)}>
-                        <span>{isOpen ? '▾' : '▸'} {group.name}</span>
-                        <span style={styles.catCount}>{group.items.length}</span>
+                    <div key={company.name}>
+                      <button style={styles.catHeader} onClick={() => toggleCat(companyKey)}>
+                        <span>{companyOpen ? '▾' : '▸'} {company.name}</span>
+                        <span style={styles.catCount}>{company.count}</span>
                       </button>
-                      {isOpen && (
-                        <div style={{ border: '1px solid #eee', borderTop: 'none', borderRadius: '0 0 10px 10px' }}>
-                          {group.items.map(item => (
-                            <div key={item.id} style={styles.catItem}>
-                              {item.thumbnail || item.image ? (
-                                <a href={item.image || item.thumbnail} target="_blank" rel="noreferrer" title="Open full-size image">
-                                  <img src={item.thumbnail || item.image} alt={item.description || item.addisonPart} style={styles.catItemThumb} />
-                                </a>
-                              ) : (
-                                <div style={{ ...styles.catItemThumb, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#bbb', fontSize: 10 }}>no image</div>
-                              )}
-                              <div style={{ minWidth: 0 }}>
-                                <div style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.3 }}>{item.description || '—'}</div>
-                                <div style={{ fontSize: 12, color: '#777', marginTop: 2 }}>
-                                  Part <strong>{item.addisonPart || '—'}</strong>{item.manufacturerPart ? ` · Mfg ${item.manufacturerPart}` : ''}{item.condition ? ` · ${item.condition}` : ''}
+                      {companyOpen && (
+                        singleGeneral ? (
+                          renderItems(company.subs[0].items)
+                        ) : (
+                          <div style={{ paddingLeft: 16 }}>
+                            {company.subs.map(sub => {
+                              const subKey = 'sub:' + company.name + '|' + sub.name;
+                              const subOpen = openCats.has(subKey) || !!vendorItemSearch;
+                              return (
+                                <div key={subKey}>
+                                  <button style={styles.subCatHeader} onClick={() => toggleCat(subKey)}>
+                                    <span>{subOpen ? '▾' : '▸'} {sub.name}</span>
+                                    <span style={styles.catCount}>{sub.items.length}</span>
+                                  </button>
+                                  {subOpen && renderItems(sub.items)}
                                 </div>
-                              </div>
-                              <div style={{ textAlign: 'right' }}>
-                                <div style={styles.priceCell}>{item.price ? '$' + Number(item.price).toFixed(2) : (item.priceLabel || '—')}</div>
-                                {item.link && <a href={item.link} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: '#185FA5' }}>source ↗</a>}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
+                              );
+                            })}
+                          </div>
+                        )
                       )}
                     </div>
                   );
@@ -493,6 +609,57 @@ export default function App() {
             <div style={styles.empty}>Pick a distributor above to browse its catalog by category.</div>
           )}
         </>
+      )}
+
+      {importTarget && (
+        <div style={styles.modalOverlay} onClick={() => !importBusy && setImportTarget('')}>
+          <div style={styles.modalCard} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+              <div style={{ fontWeight: 800, fontSize: 17 }}>Update price list</div>
+              <button style={styles.pill} onClick={() => !importBusy && setImportTarget('')}>✕</button>
+            </div>
+            <div style={{ color: '#666', fontSize: 13, marginBottom: 12 }}>
+              {(distributors.find(d => d.id === importTarget) || {}).name || importTarget}
+            </div>
+
+            <div style={{ background: '#F7FAFE', border: '1px solid #E2EDF8', borderRadius: 8, padding: '10px 12px', fontSize: 12, color: '#456', marginBottom: 14, lineHeight: 1.5 }}>
+              Upload the CSV the distributor sent (Excel → <em>Save As → CSV</em>). The first row must be column headers.
+              Recognized columns: <strong>Part Number</strong> (required), Description, Price, Category, Manufacturer&nbsp;Part, Condition, Image, Link.
+              <br />Matching parts are <strong>updated</strong>, new parts are <strong>added</strong>, and anything already in our
+              catalog that isn’t in this file <strong>stays</strong> — nothing is deleted.
+            </div>
+
+            <label style={styles.label}>Price list file (.csv, .tsv, .txt)</label>
+            <input type="file" accept=".csv,.tsv,.txt,text/csv,text/plain" onChange={onImportFile} style={{ marginBottom: 6 }} />
+            {importFileName && <div style={{ fontSize: 12, color: '#185FA5', marginBottom: 8 }}>{importFileName} · {importCsvText ? importCsvText.split(/\r?\n/).filter(Boolean).length + ' lines' : 'reading…'}</div>}
+
+            <label style={{ ...styles.label, marginTop: 6 }}>Or paste rows</label>
+            <textarea
+              style={{ ...styles.input, minHeight: 90, fontFamily: 'monospace', fontSize: 12 }}
+              value={importCsvText}
+              onChange={e => { setImportCsvText(e.target.value); setImportFileName(''); }}
+              placeholder={'Part Number,Description,Price,Category\n1174,ADC 90 Swing Control,249.00,ADC CONTROLS'}
+            />
+
+            <label style={{ ...styles.label, marginTop: 10 }}>Default category for rows without one (optional)</label>
+            <input style={styles.input} value={importDefaultCategory} onChange={e => setImportDefaultCategory(e.target.value)} placeholder="e.g. BESAM PARTS" />
+
+            {importError && <div style={{ ...styles.error, marginTop: 12 }}>{importError}</div>}
+            {importResult && (
+              <div style={{ marginTop: 12, background: '#E8F5EA', border: '1px solid #CDE8D2', color: '#2F6F3E', borderRadius: 8, padding: '10px 12px', fontSize: 13 }}>
+                Imported into <strong>{importResult.distributor}</strong>: {importResult.added} added · {importResult.updated} updated
+                {importResult.skipped ? ` · ${importResult.skipped} skipped (no part #)` : ''}. {importResult.totalForDistributor.toLocaleString()} parts total.
+              </div>
+            )}
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
+              <button style={styles.pill} onClick={() => setImportTarget('')} disabled={importBusy}>Close</button>
+              <button style={{ ...styles.button, opacity: importBusy ? 0.6 : 1 }} onClick={runImport} disabled={importBusy}>
+                {importBusy ? 'Importing…' : 'Import price list'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

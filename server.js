@@ -113,6 +113,15 @@ const DISTRIBUTORS = [
     categories: [],
   },
   {
+    id: 'multi-fab',
+    name: 'Multi-Fab Products',
+    website: 'https://www.multi-fab.com/',
+    type: 'managed-distributor',
+    enabled: true,
+    notes: 'Managed distributor entry. Catalog scraper not connected yet.',
+    categories: [],
+  },
+  {
     id: 'nabco-gyrotech',
     name: 'NABCO / Gyro Tech',
     website: 'https://www.nabcoentrances.com/',
@@ -811,6 +820,64 @@ function writeCatalogStore(items) {
   return store;
 }
 
+// ── Price-list import (CSV/TSV) ──────────────────────────────────────────────
+// Distributors periodically send updated parts/price lists. parseDelimited handles
+// quoted fields, embedded commas/newlines, CRLF, a BOM, and auto-detects comma / tab
+// / semicolon delimiters so most "Save As CSV" exports from Excel just work.
+function parseDelimited(text) {
+  const raw = String(text || '').replace(/^﻿/, '');
+  if (!raw.trim()) return [];
+  const nl = raw.indexOf('\n');
+  const firstLine = nl === -1 ? raw : raw.slice(0, nl);
+  const delim = firstLine.includes('\t') ? '\t' : (firstLine.includes(';') && !firstLine.includes(',')) ? ';' : ',';
+  const rows = [];
+  let field = '', row = [], inQuotes = false;
+  for (let i = 0; i < raw.length; i++) {
+    const ch = raw[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        if (raw[i + 1] === '"') { field += '"'; i++; } else inQuotes = false;
+      } else field += ch;
+    } else if (ch === '"') inQuotes = true;
+    else if (ch === delim) { row.push(field); field = ''; }
+    else if (ch === '\n') { row.push(field); rows.push(row); row = []; field = ''; }
+    else if (ch === '\r') { /* ignore */ }
+    else field += ch;
+  }
+  if (field.length || row.length) { row.push(field); rows.push(row); }
+  return rows;
+}
+
+const IMPORT_COLUMN_ALIASES = {
+  part: ['part', 'part #', 'part#', 'part number', 'partnumber', 'partno', 'part no', 'sku', 'item', 'item #', 'item number', 'itemnumber', 'distributor part', 'addisonpart', 'number', 'catalog #', 'catalog number', 'product code', 'productcode', 'model'],
+  description: ['description', 'desc', 'name', 'product', 'product name', 'productname', 'title', 'item description'],
+  price: ['price', 'cost', 'list price', 'listprice', 'unit price', 'unitprice', 'msrp', 'amount', 'net price', 'netprice', 'our price', 'dealer price', 'list', 'each'],
+  category: ['category', 'cat', 'group', 'product line', 'productline', 'type', 'class', 'family'],
+  manufacturerPart: ['manufacturer part', 'manufacturerpart', 'mfg', 'mfg part', 'mfgpart', 'mfg #', 'mfr', 'mfr part', 'mfrpart', 'oem', 'oem part', 'manufacturer'],
+  condition: ['condition', 'cond', 'status'],
+  image: ['image', 'image url', 'imageurl', 'photo', 'thumbnail'],
+  link: ['link', 'url', 'source', 'product url', 'producturl', 'web'],
+};
+function mapImportHeaders(headerRow) {
+  const map = {};
+  (headerRow || []).forEach((h, idx) => {
+    const key = String(h || '').trim().toLowerCase();
+    if (!key) return;
+    for (const [field, aliases] of Object.entries(IMPORT_COLUMN_ALIASES)) {
+      if (map[field] === undefined && aliases.includes(key)) { map[field] = idx; break; }
+    }
+  });
+  return map;
+}
+function parseImportPrice(v) {
+  if (v == null || String(v).trim() === '') return null;
+  const n = parseFloat(String(v).replace(/[^0-9.\-]/g, ''));
+  return Number.isFinite(n) ? n : null;
+}
+function importSlug(s) {
+  return String(s || '').trim().toUpperCase().replace(/[^A-Z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'X';
+}
+
 function textFromHtml(html) {
   return String(html || '')
     .replace(/<script[\s\S]*?<\/script>/gi, ' ')
@@ -1316,6 +1383,93 @@ app.get('/api/distributor-catalog', (req, res) => {
     updatedAt: store.updatedAt,
     count: items.length,
     items,
+  });
+});
+
+// Import / update a distributor's parts + price list from a pasted/uploaded CSV.
+// MERGE semantics (non-destructive): rows update matching parts by part number and
+// add new ones; any existing item NOT present in the upload is left untouched, so
+// parts the distributor no longer lists (or parts we added ourselves) persist.
+app.post('/api/distributors/:id/import', (req, res) => {
+  const distributor = DISTRIBUTORS.find(d => d.id === req.params.id);
+  if (!distributor) return res.status(404).json({ error: 'Unknown distributor' });
+
+  const csv = req.body?.csv;
+  if (!csv || !String(csv).trim()) return res.status(400).json({ error: 'No price-list content provided.' });
+  const defaultCategory = String(req.body?.defaultCategory || '').trim();
+
+  const rows = parseDelimited(csv);
+  if (rows.length < 2) return res.status(400).json({ error: 'Need a header row plus at least one data row.' });
+  const cols = mapImportHeaders(rows[0]);
+  if (cols.part === undefined) {
+    return res.status(400).json({ error: 'No part-number column found. Add a header like "Part Number", "SKU", or "Item".', headers: rows[0] });
+  }
+
+  const store = readCatalogStore();
+  const others = store.items.filter(it => it.distributorId !== distributor.id);
+  const mine = store.items.filter(it => it.distributorId === distributor.id);
+  const keyOf = (part) => `${distributor.id}::${String(part || '').trim().toUpperCase()}`;
+  const byKey = new Map();
+  mine.forEach(it => byKey.set(keyOf(it.addisonPart || it.manufacturerPart || it.id), it));
+
+  const now = new Date().toISOString();
+  let added = 0, updated = 0, skipped = 0;
+  for (let r = 1; r < rows.length; r++) {
+    const row = rows[r] || [];
+    if (row.every(c => !String(c || '').trim())) continue; // blank line
+    const cell = (f) => (cols[f] !== undefined ? String(row[cols[f]] ?? '').trim() : '');
+    const part = cell('part');
+    if (!part) { skipped++; continue; }
+    const hasPrice = cols.price !== undefined;
+    const price = hasPrice ? parseImportPrice(row[cols.price]) : null;
+    const existing = byKey.get(keyOf(part));
+    if (existing) {
+      if (cell('description')) existing.description = cell('description');
+      if (cell('category')) existing.category = cell('category');
+      if (cell('manufacturerPart')) existing.manufacturerPart = cell('manufacturerPart');
+      if (cell('condition')) existing.condition = cell('condition');
+      if (cell('image')) { existing.image = cell('image'); if (!existing.thumbnail) existing.thumbnail = cell('image'); }
+      if (cell('link')) existing.link = cell('link');
+      if (hasPrice) { existing.price = price; existing.priceLabel = price != null ? '' : (existing.priceLabel || '(call for price)'); }
+      existing.updatedAt = now;
+      existing.source = 'price-list';
+      updated++;
+    } else {
+      const category = cell('category') || defaultCategory || 'PRICE LIST';
+      const item = {
+        id: `${distributor.id}-${importSlug(category)}-${importSlug(part)}`,
+        distributorId: distributor.id,
+        distributor: distributor.name,
+        categoryCode: '',
+        category,
+        addisonPart: part,
+        manufacturerPart: cell('manufacturerPart'),
+        description: cell('description') || part,
+        price,
+        priceLabel: price != null ? '' : '(call for price)',
+        condition: cell('condition') || 'new',
+        thumbnail: cell('image') || '',
+        image: cell('image') || '',
+        link: cell('link') || distributor.website || '',
+        updatedAt: now,
+        source: 'price-list',
+      };
+      byKey.set(keyOf(part), item);
+      mine.push(item);
+      added++;
+    }
+  }
+
+  const nextStore = writeCatalogStore([...others, ...mine]);
+  res.json({
+    ok: true,
+    distributor: distributor.name,
+    added,
+    updated,
+    skipped,
+    totalForDistributor: mine.length,
+    totalCatalog: nextStore.items.length,
+    updatedAt: nextStore.updatedAt,
   });
 });
 
