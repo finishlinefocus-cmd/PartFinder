@@ -49,11 +49,43 @@ export default function App() {
   const [importBusy, setImportBusy] = useState(false);
   const [importResult, setImportResult] = useState(null);
   const [importError, setImportError] = useState('');
+  // Per-vendor mapping editor: each vendor formats consistently, so a one-time correction sticks.
+  const [mapEdit, setMapEdit] = useState(null);       // { field: "Header Text" | "" }
+  const [priceMode, setPriceMode] = useState('list'); // 'list' | 'net' — which price is the headline
+  // Changes & Alerts tab: global recent import events + currently unavailable parts.
+  const [changeEvents, setChangeEvents] = useState([]);
+  const [availability, setAvailability] = useState(null); // { total, available, unavailable: [] }
+  const [alertsLoading, setAlertsLoading] = useState(false);
+  const [alertsError, setAlertsError] = useState('');
 
   useEffect(() => {
     loadDistributors();
     loadCatalog();
   }, []);
+
+  // Load the change feed + availability whenever the Changes & Alerts tab is opened
+  // (and after an import, which bumps the catalog through loadCatalog/selectVendor).
+  useEffect(() => {
+    if (activeTab === 'changes') loadAlerts();
+  }, [activeTab]);
+
+  async function loadAlerts() {
+    setAlertsLoading(true);
+    setAlertsError('');
+    try {
+      const [chRes, avRes] = await Promise.all([
+        fetch('/api/changes'),
+        fetch('/api/availability'),
+      ]);
+      const chData = await chRes.json();
+      const avData = await avRes.json();
+      setChangeEvents(chData.events || []);
+      setAvailability(avData || null);
+    } catch (err) {
+      setAlertsError('Could not load changes & alerts: ' + err.message);
+    }
+    setAlertsLoading(false);
+  }
 
   async function loadDistributors() {
     const res = await fetch('/api/distributors');
@@ -101,6 +133,8 @@ export default function App() {
     setImportDefaultCategory('');
     setImportResult(null);
     setImportError('');
+    setMapEdit(null);
+    setPriceMode('list');
   }
   function onImportFile(e) {
     const file = e.target.files && e.target.files[0];
@@ -127,21 +161,27 @@ export default function App() {
       reader.readAsText(file);
     }
   }
-  async function runImport() {
+  async function runImport(opts = {}) {
     if (!importTarget) return;
     if (!importCsvText.trim()) { setImportError('Choose a CSV file or paste rows first.'); return; }
     setImportBusy(true);
     setImportError('');
-    setImportResult(null);
+    if (!opts.keepResult) setImportResult(null);
     try {
+      const body = { csv: importCsvText, defaultCategory: importDefaultCategory.trim() || undefined };
+      // Re-import with the corrected column mapping / headline-price choice for this vendor.
+      if (opts.overrides) body.overrides = opts.overrides;
+      if (opts.priceMode) body.priceMode = opts.priceMode;
       const res = await fetch('/api/distributors/' + encodeURIComponent(importTarget) + '/import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ csv: importCsvText, defaultCategory: importDefaultCategory.trim() || undefined }),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
       if (!res.ok) { setImportError(data.error || 'Import failed.'); setImportBusy(false); return; }
       setImportResult(data);
+      setMapEdit({ ...(data.mapping || {}) }); // seed the editor with what we read
+      setPriceMode(data.priceMode || 'list');
       await loadDistributors();
       await loadCatalog('');
       selectVendor(importTarget);
@@ -414,7 +454,15 @@ export default function App() {
 
       <div style={styles.tabs}>
         <button style={{ ...styles.tab, ...(activeTab === 'search' ? styles.tabActive : {}) }} onClick={() => setActiveTab('search')}>Search</button>
-        <button style={{ ...styles.tab, ...(activeTab === 'distributors' ? styles.tabActive : {}) }} onClick={() => setActiveTab('distributors')}>Distributors</button>
+        <button style={{ ...styles.tab, ...(activeTab === 'distributors' ? styles.tabActive : {}) }} onClick={() => setActiveTab('distributors')}>Price Lists</button>
+        <button style={{ ...styles.tab, ...(activeTab === 'changes' ? styles.tabActive : {}) }} onClick={() => setActiveTab('changes')}>
+          Changes &amp; Alerts
+          {availability && availability.unavailable && availability.unavailable.length > 0 && (
+            <span style={{ marginLeft: 6, fontSize: 11, fontWeight: 700, padding: '1px 7px', borderRadius: 999, background: '#FCEBEB', color: '#A32D2D' }}>
+              {availability.unavailable.length}
+            </span>
+          )}
+        </button>
       </div>
 
       {activeTab === 'search' && (
@@ -638,9 +686,12 @@ export default function App() {
             </div>
 
             <div style={{ background: '#F7FAFE', border: '1px solid #E2EDF8', borderRadius: 8, padding: '10px 12px', fontSize: 12, color: '#456', marginBottom: 14, lineHeight: 1.5 }}>
-              Upload the file the distributor sent — <strong>Excel (.xlsx/.xls)</strong> or CSV/TSV. The first row must be
-              column headers. Recognized columns: <strong>Part Number</strong> (required), Description, Price, Category,
-              Manufacturer&nbsp;Part, Condition, Image, Link. (For multi-tab workbooks, the first sheet is used.)
+              Upload the file the distributor sent <strong>exactly as they sent it</strong> — Excel (.xlsx/.xls) or CSV/TSV.
+              You don’t need to clean it up: the importer <strong>finds the header row automatically</strong> (even under a
+              title/logo banner), recognizes varied column names (Part&nbsp;#, SKU, Product, PART&nbsp;NUMBER, Entry&nbsp;Name…),
+              picks up <strong>list price and net/cost</strong> when both are present, treats “BUTT&nbsp;HINGES”-style divider rows
+              as categories, and rounds off vendor price rounding noise. It’ll show you which columns it read after import.
+              (For multi-tab workbooks, the first sheet is used.)
               <br />Matching parts are <strong>updated</strong>, new parts are <strong>added</strong>, and anything already in our
               catalog that isn’t in this file <strong>stays</strong> — nothing is deleted.
             </div>
@@ -664,13 +715,151 @@ export default function App() {
             {importResult && (
               <div style={{ marginTop: 12, background: '#E8F5EA', border: '1px solid #CDE8D2', color: '#2F6F3E', borderRadius: 8, padding: '10px 12px', fontSize: 13 }}>
                 Imported into <strong>{importResult.distributor}</strong>: {importResult.added} added · {importResult.updated} updated
-                {importResult.skipped ? ` · ${importResult.skipped} skipped (no part #)` : ''}. {importResult.totalForDistributor.toLocaleString()} parts total.
+                {importResult.skipped ? ` · ${importResult.skipped} skipped (no part #)` : ''}
+                {importResult.sections ? ` · ${importResult.sections} category sections` : ''}. {importResult.totalForDistributor.toLocaleString()} parts total.
+                <div style={{ marginTop: 6, fontSize: 12, color: '#3B6D4A' }}>
+                  {importResult.withList ? `${importResult.withList.toLocaleString()} with list price` : ''}
+                  {importResult.withList && importResult.withNet ? ' · ' : ''}
+                  {importResult.withNet ? <strong>{importResult.withNet.toLocaleString()} with NET price</strong> : (importResult.withList ? '' : 'no prices found')}
+                  {' · headline = '}<strong>{importResult.priceMode === 'net' ? 'NET' : 'list'}</strong>
+                  {'. '}{importResult.learned ? 'Learned this vendor’s format — future uploads map the same way.' : 'Used this vendor’s saved format.'}
+                </div>
+
+                {/* What changed since last import — the point of all this: catch price moves ASAP. */}
+                {importResult.changes && (
+                  <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #CDE8D2' }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: '#2F6F3E', marginBottom: 6 }}>What changed</div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+                      {[
+                        { n: importResult.changes.added, label: 'new', bg: '#E6F1FB', fg: '#0C447C' },
+                        { n: importResult.changes.priceUp, label: 'price ↑', bg: '#FCEBEB', fg: '#A32D2D' },
+                        { n: importResult.changes.priceDown, label: 'price ↓', bg: '#EAF3DE', fg: '#3B6D11' },
+                        { n: importResult.changes.unchanged, label: 'unchanged', bg: '#F1EFE8', fg: '#5F5E5A' },
+                        { n: importResult.changes.discontinued, label: 'discontinued', bg: '#FCEBEB', fg: '#A32D2D' },
+                      ].filter(b => b.n).map(b => (
+                        <span key={b.label} style={{ fontSize: 12, fontWeight: 600, padding: '3px 9px', borderRadius: 999, background: b.bg, color: b.fg }}>
+                          {b.n.toLocaleString()} {b.label}
+                        </span>
+                      ))}
+                    </div>
+
+                    {/* Partial upload — this file only re-listed some of what we already had, so we
+                        deliberately did NOT mass-flag the absent parts as discontinued. */}
+                    {importResult.changes.partialUpload && (
+                      <div style={{ fontSize: 11.5, background: '#FAEEDA', border: '1px solid #FAC775', color: '#633806', borderRadius: 6, padding: '7px 9px', marginBottom: 8 }}>
+                        ⚠ Partial upload (covered {Math.round((importResult.changes.coverage || 0) * 100)}% of known parts) — availability not changed for the rest.
+                      </div>
+                    )}
+
+                    {/* Newly discontinued / unavailable parts (red — these can't be sold). */}
+                    {importResult.changes.discontinuedSample?.length > 0 && (
+                      <div style={{ marginBottom: 8 }}>
+                        <div style={{ fontSize: 11, color: '#A32D2D', fontWeight: 600, marginBottom: 4 }}>Newly discontinued / unavailable:</div>
+                        <div style={{ display: 'grid', gap: 3 }}>
+                          {importResult.changes.discontinuedSample.slice(0, 8).map((d, i) => (
+                            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
+                              <span style={{ fontFamily: 'monospace', color: '#A32D2D', fontWeight: 700 }}>{d.part}</span>
+                              <span style={{ color: '#9aa', fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.description}</span>
+                              {d.lastPrice != null && <span style={{ color: '#789', marginLeft: 'auto', whiteSpace: 'nowrap' }}>last ${Number(d.lastPrice).toFixed(2)}</span>}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Newly added parts. */}
+                    {importResult.changes.addedSample?.length > 0 && (
+                      <div style={{ marginBottom: 8 }}>
+                        <div style={{ fontSize: 11, color: '#0C447C', fontWeight: 600, marginBottom: 4 }}>Newly added:</div>
+                        <div style={{ display: 'grid', gap: 3 }}>
+                          {importResult.changes.addedSample.slice(0, 8).map((a, i) => (
+                            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
+                              <span style={{ fontFamily: 'monospace', color: '#0C447C', fontWeight: 700 }}>{a.part}</span>
+                              <span style={{ color: '#9aa', fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.description}</span>
+                              {a.price != null && <span style={{ color: '#789', marginLeft: 'auto', whiteSpace: 'nowrap' }}>${Number(a.price).toFixed(2)}</span>}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {/* Format drift — vendor changed their layout */}
+                    {(importResult.changes.formatWarnings?.length > 0 || importResult.changes.newColumns?.length > 0) && (
+                      <div style={{ fontSize: 11.5, background: '#FAEEDA', border: '1px solid #FAC775', color: '#633806', borderRadius: 6, padding: '7px 9px', marginBottom: 8 }}>
+                        {importResult.changes.formatWarnings?.map((w, i) => <div key={i}>⚠ {w.msg}</div>)}
+                        {importResult.changes.newColumns?.length > 0 && (
+                          <div>New column{importResult.changes.newColumns.length > 1 ? 's' : ''} captured: <strong>{importResult.changes.newColumns.join(', ')}</strong> — stored on each part; map any to a field above if you want it searchable.</div>
+                        )}
+                      </div>
+                    )}
+                    {/* Biggest price movers */}
+                    {importResult.changes.topMovers?.length > 0 && (
+                      <div>
+                        <div style={{ fontSize: 11, color: '#456', marginBottom: 4 }}>Biggest moves:</div>
+                        <div style={{ display: 'grid', gap: 3 }}>
+                          {importResult.changes.topMovers.slice(0, 8).map((m, i) => (
+                            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
+                              <span style={{ color: m.dir === 'priceUp' ? '#A32D2D' : '#3B6D11', fontWeight: 700, width: 54 }}>
+                                {m.deltaPct > 0 ? '+' : ''}{m.deltaPct}%
+                              </span>
+                              <span style={{ fontFamily: 'monospace', color: '#234' }}>{m.part}</span>
+                              <span style={{ color: '#789' }}>{m.field} ${m.from} → ${m.to}</span>
+                              <span style={{ color: '#9aa', fontSize: 11, marginLeft: 'auto', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.description}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Per-vendor mapping editor: correct a column once and it sticks for this distributor. */}
+                {mapEdit && Array.isArray(importResult.headers) && (
+                  <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #CDE8D2' }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: '#2F6F3E', marginBottom: 6 }}>
+                      Columns read (header row {importResult.headerRow}) — fix any that are wrong, then re-import:
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))', gap: 8 }}>
+                      {['part', 'description', 'price', 'net', 'category', 'manufacturerPart', 'quantity', 'uom'].map(field => (
+                        <label key={field} style={{ fontSize: 11, color: '#456' }}>
+                          <span style={{ display: 'block', marginBottom: 2, fontWeight: 600 }}>
+                            {field === 'price' ? 'list price' : field === 'net' ? 'net / our cost' : field === 'manufacturerPart' ? 'mfg part' : field}
+                          </span>
+                          <select
+                            value={mapEdit[field] ?? ''}
+                            onChange={e => setMapEdit(m => ({ ...m, [field]: e.target.value }))}
+                            style={{ width: '100%', fontSize: 12, padding: '5px 6px', border: '1px solid #CDE8D2', borderRadius: 6, background: '#fff', color: '#234' }}
+                          >
+                            <option value="">(none)</option>
+                            {[...new Set(importResult.headers.filter(Boolean))].map(h => (
+                              <option key={h} value={h}>{h}</option>
+                            ))}
+                          </select>
+                        </label>
+                      ))}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10, flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: 12, color: '#456' }}>Headline price:</span>
+                      {['list', 'net'].map(mode => (
+                        <button key={mode} onClick={() => setPriceMode(mode)}
+                          style={{ fontSize: 12, padding: '4px 10px', borderRadius: 6, cursor: 'pointer',
+                            border: priceMode === mode ? '1px solid #2F6F3E' : '1px solid #CDE8D2',
+                            background: priceMode === mode ? '#2F6F3E' : '#fff', color: priceMode === mode ? '#fff' : '#456', fontWeight: 600 }}>
+                          {mode === 'net' ? 'Net (our cost)' : 'List / MSRP'}
+                        </button>
+                      ))}
+                      <button onClick={() => runImport({ overrides: mapEdit, priceMode, keepResult: true })} disabled={importBusy}
+                        style={{ marginLeft: 'auto', fontSize: 12, padding: '5px 12px', borderRadius: 6, cursor: 'pointer', border: '1px solid #185FA5', background: '#185FA5', color: '#fff', fontWeight: 600, opacity: importBusy ? 0.6 : 1 }}>
+                        {importBusy ? 'Applying…' : 'Apply mapping & re-import'}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
               <button style={styles.pill} onClick={() => setImportTarget('')} disabled={importBusy}>Close</button>
-              <button style={{ ...styles.button, opacity: importBusy ? 0.6 : 1 }} onClick={runImport} disabled={importBusy}>
+              <button style={{ ...styles.button, opacity: importBusy ? 0.6 : 1 }} onClick={() => runImport()} disabled={importBusy}>
                 {importBusy ? 'Importing…' : 'Import price list'}
               </button>
             </div>

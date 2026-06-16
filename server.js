@@ -799,7 +799,7 @@ const PUBLIC_SITE_CONNECTORS = {
 };
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '64mb' })); // vendor price lists pasted/uploaded as CSV can be 100s of KB (Door Controls ≈ 527KB)
 
 function readCatalogStore() {
   if (!existsSync(CATALOG_FILE)) {
@@ -818,6 +818,45 @@ function writeCatalogStore(items) {
   const store = { updatedAt: new Date().toISOString(), items };
   writeFileSync(CATALOG_FILE, JSON.stringify(store, null, 2));
   return store;
+}
+
+// ── Per-distributor import format profiles ───────────────────────────────────
+// Each vendor lays their price list out the SAME way every time, but differently
+// from every other vendor. So we LEARN a distributor's layout on first import and
+// reuse it on every later upload — matching columns by header NAME (robust to the
+// vendor reordering columns), and letting an admin pin/correct a column once so it
+// sticks. profile = { headerRow, columns: { field: "Header Text" }, updatedAt }.
+const IMPORT_PROFILES_FILE = './distributorImportProfiles.json';
+function readImportProfiles() {
+  if (!existsSync(IMPORT_PROFILES_FILE)) return {};
+  try { return JSON.parse(readFileSync(IMPORT_PROFILES_FILE, 'utf-8')) || {}; }
+  catch (err) { console.error('Import profile read error:', err.message); return {}; }
+}
+function writeImportProfile(distributorId, profile) {
+  const all = readImportProfiles();
+  all[distributorId] = { ...profile, updatedAt: new Date().toISOString() };
+  writeFileSync(IMPORT_PROFILES_FILE, JSON.stringify(all, null, 2));
+  return all[distributorId];
+}
+
+// ── Import change log ────────────────────────────────────────────────────────
+// The catalog is a LIVING dataset — vendors raise/drop prices on their own
+// schedules. Every import records what changed (added / price up / price down /
+// missing) + the biggest movers + any format drift, so we can see "what changed
+// and when" per vendor instead of silently overwriting. Last 50 events per vendor.
+const CHANGE_LOG_FILE = './distributorChangeLog.json';
+function readChangeLog() {
+  if (!existsSync(CHANGE_LOG_FILE)) return {};
+  try { return JSON.parse(readFileSync(CHANGE_LOG_FILE, 'utf-8')) || {}; }
+  catch (err) { console.error('Change log read error:', err.message); return {}; }
+}
+function appendChangeLog(distributorId, event) {
+  const all = readChangeLog();
+  const list = Array.isArray(all[distributorId]) ? all[distributorId] : [];
+  list.unshift(event);
+  all[distributorId] = list.slice(0, 50);
+  writeFileSync(CHANGE_LOG_FILE, JSON.stringify(all, null, 2));
+  return all[distributorId];
 }
 
 // ── Price-list import (CSV/TSV) ──────────────────────────────────────────────
@@ -848,31 +887,145 @@ function parseDelimited(text) {
   return rows;
 }
 
+// Real vendor price lists never match a fixed template: the header is buried
+// under title/preamble rows, column names vary wildly, category rows are
+// interleaved, prices carry float noise, and merged cells leave gaps. This
+// parser adapts to the file instead of forcing the file to adapt to us:
+//   detectHeaderRow → find the real header anywhere in the first 40 rows
+//   mapImportHeaders → fuzzy-match + content-sample columns to our fields
+//   sectionCategory  → treat one-cell "BUTT HINGES" rows as a running category
+// Aliases are ordered most-specific-first; longer/exact matches outscore loose ones.
 const IMPORT_COLUMN_ALIASES = {
-  part: ['part', 'part #', 'part#', 'part number', 'partnumber', 'partno', 'part no', 'sku', 'item', 'item #', 'item number', 'itemnumber', 'distributor part', 'addisonpart', 'number', 'catalog #', 'catalog number', 'product code', 'productcode', 'model'],
-  description: ['description', 'desc', 'name', 'product', 'product name', 'productname', 'title', 'item description'],
-  price: ['price', 'cost', 'list price', 'listprice', 'unit price', 'unitprice', 'msrp', 'amount', 'net price', 'netprice', 'our price', 'dealer price', 'list', 'each'],
-  category: ['category', 'cat', 'group', 'product line', 'productline', 'type', 'class', 'family'],
-  manufacturerPart: ['manufacturer part', 'manufacturerpart', 'mfg', 'mfg part', 'mfgpart', 'mfg #', 'mfr', 'mfr part', 'mfrpart', 'oem', 'oem part', 'manufacturer'],
+  part: ['part number', 'part no', 'part #', 'part', 'sku', 'item number', 'item #', 'item', 'model', 'catalog number', 'catalog #', 'product code', 'entry name', 'distributor part', 'stock number', 'number'],
+  description: ['description', 'desc', 'item description', 'product name', 'product', 'title', 'details', 'name'],
+  price: ['list price', 'msrp', 'retail price', 'list', 'retail', 'suggested price', 'unit price', 'amount', 'each', 'price'],
+  // "net" = our cost from the vendor (a.k.a. discount/dealer/jobber/wholesale price). A true
+  // percentage column (Discount % = 0.5) is rejected later by the ≤1 value-fraction guard.
+  net: ['net price', 'discount price', 'dealer price', 'jobber price', 'wholesale price', 'distributor price', 'your price', 'your cost', 'our price', 'our cost', 'buy price', 'sell price', 'disc price', 'd c price', 'dc price', 'net', 'cost', 'disc', 'discount', 'dealer', 'jobber', 'wholesale', 'whsl', 'buy'],
+  category: ['discount group', 'product line', 'item group name', 'item group', 'category', 'group', 'class', 'family', 'type', 'cat'],
+  manufacturerPart: ['manufacturer part', 'mfg part', 'mfr part', 'oem part', 'oem code', 'manufacturer', 'mfg', 'mfr', 'oem'],
+  quantity: ['quantity on hand', 'qty on hand', 'quantity', 'on hand', 'in stock', 'qty', 'stock'],
   condition: ['condition', 'cond', 'status'],
-  image: ['image', 'image url', 'imageurl', 'photo', 'thumbnail'],
-  link: ['link', 'url', 'source', 'product url', 'producturl', 'web'],
+  image: ['image url', 'image', 'photo', 'thumbnail'],
+  link: ['link', 'product url', 'url', 'source', 'web'],
+  uom: ['unit of measure', 'uom', 'um', 'unit'],
 };
-function mapImportHeaders(headerRow) {
-  const map = {};
-  (headerRow || []).forEach((h, idx) => {
-    const key = String(h || '').trim().toLowerCase();
-    if (!key) return;
-    for (const [field, aliases] of Object.entries(IMPORT_COLUMN_ALIASES)) {
-      if (map[field] === undefined && aliases.includes(key)) { map[field] = idx; break; }
-    }
-  });
-  return map;
-}
+const IMPORT_PRICE_FIELDS = new Set(['price', 'net']);
+const IMPORT_FIELD_KEYS = new Set(Object.keys(IMPORT_COLUMN_ALIASES));
+const importNorm = (s) => String(s == null ? '' : s).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+const importHasWord = (hay, needle) => (' ' + hay + ' ').includes(' ' + needle + ' ');
+
 function parseImportPrice(v) {
   if (v == null || String(v).trim() === '') return null;
   const n = parseFloat(String(v).replace(/[^0-9.\-]/g, ''));
-  return Number.isFinite(n) ? n : null;
+  if (!Number.isFinite(n)) return null;
+  return Math.round(n * 100) / 100; // round away vendor float noise (338.3960625 → 338.4)
+}
+
+// Sample the data under a column to learn its shape (numeric? fractional? text?).
+function importColumnStats(rows, headerRowIdx, colIdx, sampleN = 40) {
+  let numeric = 0, fraction = 0, text = 0, filled = 0, total = 0;
+  for (let r = headerRowIdx + 1; r < rows.length && total < sampleN; r++) {
+    const s = String((rows[r] && rows[r][colIdx]) ?? '').trim();
+    total++;
+    if (!s) continue;
+    filled++;
+    const n = parseFloat(s.replace(/[^0-9.\-]/g, ''));
+    const isNum = Number.isFinite(n) && /[0-9]/.test(s) && /^[\s$£€]*[-0-9.,%]+\s*%?$/.test(s);
+    if (isNum) { numeric++; if (Math.abs(n) <= 1) fraction++; }
+    else if (/[a-z]/i.test(s)) text++;
+  }
+  return { numeric, fraction, text, filled, total };
+}
+
+function importScoreHeaderField(headerNorm, field) {
+  if (!headerNorm) return 0;
+  let best = 0;
+  for (const alias of IMPORT_COLUMN_ALIASES[field]) {
+    let s = 0;
+    if (headerNorm === alias) s = 100 + alias.length;
+    else if (importHasWord(headerNorm, alias)) s = 60 + alias.length;
+    else if (alias.length >= 4 && importHasWord(alias, headerNorm)) s = 40 + headerNorm.length;
+    if (s > best) best = s;
+  }
+  return best;
+}
+
+// Map a header row → { field: colIdx }. Greedy 1:1 assignment by score, with
+// content sampling to reject percentage columns and back-fill description/part.
+function mapImportHeaders(rows, headerRowIdx) {
+  const header = rows[headerRowIdx] || [];
+  const stats = header.map((_, c) => importColumnStats(rows, headerRowIdx, c));
+  const pairs = [];
+  header.forEach((h, c) => {
+    const hn = importNorm(h);
+    if (!hn) return;
+    for (const field of Object.keys(IMPORT_COLUMN_ALIASES)) {
+      const s = importScoreHeaderField(hn, field);
+      if (!s) continue;
+      // A "price"/"cost" column whose values are all ≤1 is a percentage (e.g. Discount % = 0.5), not money.
+      if (IMPORT_PRICE_FIELDS.has(field) && stats[c].numeric > 0 && stats[c].fraction === stats[c].numeric) continue;
+      pairs.push({ c, field, s });
+    }
+  });
+  pairs.sort((a, b) => b.s - a.s || a.c - b.c);
+  const map = {}, usedCol = new Set();
+  for (const p of pairs) {
+    if (map[p.field] !== undefined || usedCol.has(p.c)) continue;
+    map[p.field] = p.c; usedCol.add(p.c);
+  }
+  // Fallback: description = the unused, mostly-text column with the most words.
+  if (map.description === undefined) {
+    let best = -1, bestScore = 0;
+    header.forEach((_, c) => {
+      if (usedCol.has(c)) return;
+      const score = stats[c].text - stats[c].numeric;
+      if (stats[c].text >= 2 && score > bestScore) { bestScore = score; best = c; }
+    });
+    if (best >= 0) { map.description = best; usedCol.add(best); }
+  }
+  // Fallback: part = first unused, mostly-filled column (vendor code).
+  if (map.part === undefined) {
+    let best = -1;
+    header.forEach((_, c) => {
+      if (best >= 0 || usedCol.has(c)) return;
+      if (stats[c].filled >= Math.max(2, stats[c].total * 0.5)) best = c;
+    });
+    if (best >= 0) { map.part = best; usedCol.add(best); }
+  }
+  return map;
+}
+
+// Find the header row: the row within the first 40 that resolves the most of
+// our fields AND yields a part column. Skips title/preamble/blank lead-in rows.
+function detectHeaderRow(rows) {
+  const limit = Math.min(rows.length, 40);
+  let bestRow = 0, bestScore = -1;
+  for (let r = 0; r < limit; r++) {
+    const row = rows[r] || [];
+    const nonEmpty = row.filter(c => String(c ?? '').trim()).length;
+    if (nonEmpty < 2) continue;
+    const map = mapImportHeaders(rows, r);
+    if (map.part === undefined) continue;
+    const fields = Object.keys(map).length;
+    const hasMoney = map.price !== undefined || map.cost !== undefined;
+    const score = fields * 10 + (hasMoney ? 5 : 0) + nonEmpty - r; // earlier + richer wins
+    if (score > bestScore) { bestScore = score; bestRow = r; }
+  }
+  return bestRow;
+}
+
+// A category/section divider row: a single heading-like cell, no price.
+// e.g. Direct Hardware's "BUTT HINGES" / "EXIT DEVICES" rows → running category.
+function sectionCategory(row, map) {
+  const cells = (row || []).map((c, i) => [String(c ?? '').trim(), i]).filter(([v]) => v);
+  if (cells.length !== 1) return null;
+  const [val, idx] = cells[0];
+  if (map.part !== undefined && idx !== map.part && idx !== 0) return null;
+  if (val.length < 3 || parseImportPrice(val) != null) return null;
+  const letters = (val.match(/[a-z]/gi) || []).length;
+  const looksHeading = /[a-z].*[ &/].*[a-z]/i.test(val) || (/^[A-Z0-9 ()/&.\-]+$/.test(val) && letters >= 3);
+  return looksHeading ? val.replace(/\s+/g, ' ') : null;
 }
 function importSlug(s) {
   return String(s || '').trim().toUpperCase().replace(/[^A-Z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'X';
@@ -1400,9 +1553,58 @@ app.post('/api/distributors/:id/import', (req, res) => {
 
   const rows = parseDelimited(csv);
   if (rows.length < 2) return res.status(400).json({ error: 'Need a header row plus at least one data row.' });
-  const cols = mapImportHeaders(rows[0]);
+  const headerRow = detectHeaderRow(rows);
+  const headerCells = (rows[headerRow] || []).map(h => String(h ?? '').trim());
+  const cols = mapImportHeaders(rows, headerRow);
+
+  // This vendor always sends the same layout → reuse the learned profile, and let an
+  // admin pin/correct a column by header NAME (override wins). Matching by header TEXT
+  // survives the vendor reordering columns between files.
+  const colForHeaderName = (name) => {
+    const target = importNorm(name);
+    if (!target) return undefined;
+    let idx = headerCells.findIndex(h => importNorm(h) === target);
+    if (idx < 0) idx = headerCells.findIndex(h => importNorm(h) && (importHasWord(importNorm(h), target) || importHasWord(target, importNorm(h))));
+    return idx >= 0 ? idx : undefined;
+  };
+  const savedProfile = readImportProfiles()[distributor.id] || null;
+  const overrides = (req.body?.overrides && typeof req.body.overrides === 'object') ? req.body.overrides : {};
+  const pinned = { ...(savedProfile?.columns || {}), ...overrides }; // saved layout, then admin corrections
+  for (const [field, headerName] of Object.entries(pinned)) {
+    if (!IMPORT_FIELD_KEYS.has(field)) continue;
+    if (headerName == null || String(headerName).trim() === '') { delete cols[field]; continue; } // explicit "none"
+    const idx = colForHeaderName(headerName);
+    if (idx !== undefined) cols[field] = idx;
+  }
   if (cols.part === undefined) {
-    return res.status(400).json({ error: 'No part-number column found. Add a header like "Part Number", "SKU", or "Item".', headers: rows[0] });
+    return res.status(400).json({ error: 'No part-number column found. Add a header like "Part Number", "SKU", "Item", or "Product".', headers: headerCells });
+  }
+  // priceMode: 'list' shows MSRP/list as the headline price, 'net' shows our cost.
+  // Net is ALWAYS captured into netPrice regardless — this only controls the displayed number.
+  const priceMode = (req.body?.priceMode === 'net' || req.body?.priceMode === 'list')
+    ? req.body.priceMode : (savedProfile?.priceMode || 'list');
+
+  // ── Format-drift detection ──
+  // Vendors change their layout on their own schedule. Compare this file's headers
+  // to the ones we saw last time: a column we relied on disappearing is a WARNING;
+  // brand-new columns are captured (not dropped) so the data is never lost and the
+  // admin can promote them to a real field via the mapping editor.
+  const mappedIdx = new Set(Object.values(cols));
+  const unmappedCols = headerCells.map((h, i) => ({ h, i })).filter(x => x.h && !mappedIdx.has(x.i));
+  const formatWarnings = [];
+  const priorHeaders = savedProfile?.headers || (savedProfile?.columns ? Object.values(savedProfile.columns) : null);
+  let newColumns = [], removedColumns = [];
+  if (priorHeaders) {
+    const priorSet = new Set(priorHeaders.map(importNorm));
+    const nowSet = new Set(headerCells.filter(Boolean).map(importNorm));
+    newColumns = headerCells.filter(h => h && !priorSet.has(importNorm(h)));
+    removedColumns = priorHeaders.filter(h => h && !nowSet.has(importNorm(h)));
+    // A field we mapped last time that we can no longer place is the dangerous case.
+    for (const [field, savedHeader] of Object.entries(savedProfile?.columns || {})) {
+      if (!savedHeader) continue;
+      if (cols[field] === undefined) formatWarnings.push({ field, was: savedHeader, now: null, msg: `Column for "${field}" (was “${savedHeader}”) is missing — value not imported until remapped.` });
+      else if (importNorm(headerCells[cols[field]]) !== importNorm(savedHeader)) formatWarnings.push({ field, was: savedHeader, now: headerCells[cols[field]], msg: `"${field}" moved from “${savedHeader}” to “${headerCells[cols[field]]}”.` });
+    }
   }
 
   const store = readCatalogStore();
@@ -1413,29 +1615,88 @@ app.post('/api/distributors/:id/import', (req, res) => {
   mine.forEach(it => byKey.set(keyOf(it.addisonPart || it.manufacturerPart || it.id), it));
 
   const now = new Date().toISOString();
-  let added = 0, updated = 0, skipped = 0;
-  for (let r = 1; r < rows.length; r++) {
+  const priorCount = mine.length; // parts we already had for this vendor (for partial-upload guard)
+  let added = 0, updated = 0, skipped = 0, sections = 0, withNet = 0, withList = 0;
+  let priceUp = 0, priceDown = 0, unchanged = 0;
+  const movers = []; // { part, description, field, from, to, deltaPct, dir }
+  const addedSample = []; // brand-new parts this import
+  const seenKeys = new Set();
+  let currentCategory = '';
+  const hasPrice = cols.price !== undefined;
+  const hasNet = cols.net !== undefined;
+  const hasQty = cols.quantity !== undefined;
+  const round2 = (n) => Math.round(n * 100) / 100;
+
+  for (let r = headerRow + 1; r < rows.length; r++) {
     const row = rows[r] || [];
     if (row.every(c => !String(c || '').trim())) continue; // blank line
+    const sec = sectionCategory(row, cols); // "BUTT HINGES" divider → running category
+    if (sec) { currentCategory = sec; sections++; continue; }
     const cell = (f) => (cols[f] !== undefined ? String(row[cols[f]] ?? '').trim() : '');
     const part = cell('part');
     if (!part) { skipped++; continue; }
-    const hasPrice = cols.price !== undefined;
-    const price = hasPrice ? parseImportPrice(row[cols.price]) : null;
+    seenKeys.add(keyOf(part));
+    const list = hasPrice ? parseImportPrice(row[cols.price]) : null;
+    const net = hasNet ? parseImportPrice(row[cols.net]) : null;
+    const sell = priceMode === 'net' ? (net != null ? net : list) : (list != null ? list : net);
+    if (net != null) withNet++;
+    if (list != null) withList++;
+    const qty = hasQty ? parseImportPrice(row[cols.quantity]) : null;
+    const rowCategory = cell('category') || currentCategory;
+    // Capture any unmapped columns so a vendor adding a field never loses data.
+    let extra = null;
+    for (const uc of unmappedCols) { const v = String(row[uc.i] ?? '').trim(); if (v) (extra ||= {})[uc.h] = v; }
     const existing = byKey.get(keyOf(part));
+
+    // ── Classify the change vs what we had ──
+    const beforeList = existing ? (existing.listPrice ?? null) : null;
+    const beforeNet = existing ? (existing.netPrice ?? null) : null;
+    let priceMoved = false;
+    if (existing) {
+      const oldV = beforeNet != null ? beforeNet : beforeList;
+      const newV = net != null ? net : list;
+      const field = (net != null && beforeNet != null) ? 'net' : 'list';
+      const from = field === 'net' ? beforeNet : beforeList;
+      const to = field === 'net' ? net : list;
+      if (from != null && to != null && from !== to) {
+        priceMoved = true;
+        const dir = to > from ? 'priceUp' : 'priceDown';
+        if (dir === 'priceUp') priceUp++; else priceDown++;
+        movers.push({ part, description: (existing.description || part).slice(0, 48), field, from, to, deltaPct: from > 0 ? round2(((to - from) / from) * 100) : null, dir });
+      } else {
+        unchanged++;
+      }
+    }
+    const priceHistEntry = (existing ? priceMoved : (list != null || net != null))
+      ? { at: now, list: list ?? null, net: net ?? null } : null;
+
     if (existing) {
       if (cell('description')) existing.description = cell('description');
-      if (cell('category')) existing.category = cell('category');
+      if (rowCategory) existing.category = rowCategory;
       if (cell('manufacturerPart')) existing.manufacturerPart = cell('manufacturerPart');
       if (cell('condition')) existing.condition = cell('condition');
+      if (cell('uom')) existing.uom = cell('uom');
       if (cell('image')) { existing.image = cell('image'); if (!existing.thumbnail) existing.thumbnail = cell('image'); }
       if (cell('link')) existing.link = cell('link');
-      if (hasPrice) { existing.price = price; existing.priceLabel = price != null ? '' : (existing.priceLabel || '(call for price)'); }
+      if (extra) existing.extra = { ...(existing.extra || {}), ...extra };
+      if (hasPrice || hasNet) { existing.price = sell; existing.priceLabel = sell != null ? '' : (existing.priceLabel || '(call for price)'); }
+      if (list != null) existing.listPrice = list;
+      if (net != null) existing.netPrice = net;
+      if (qty != null) existing.quantity = qty;
+      if (priceHistEntry) existing.priceHistory = [...(existing.priceHistory || []), priceHistEntry].slice(-24);
+      existing.lastSeenInList = now;
+      // It's in the vendor's current list → available to sell. Clear any prior discontinued flags.
+      const wasUnavailable = existing.available === false;
+      existing.available = true;
+      existing.availability = 'active';
+      if (existing.missingSince) delete existing.missingSince;
+      if (existing.missedImports) delete existing.missedImports;
+      if (wasUnavailable) existing.reactivatedAt = now;
       existing.updatedAt = now;
       existing.source = 'price-list';
       updated++;
     } else {
-      const category = cell('category') || defaultCategory || 'PRICE LIST';
+      const category = rowCategory || defaultCategory || 'PRICE LIST';
       const item = {
         id: `${distributor.id}-${importSlug(category)}-${importSlug(part)}`,
         distributorId: distributor.id,
@@ -1445,32 +1706,158 @@ app.post('/api/distributors/:id/import', (req, res) => {
         addisonPart: part,
         manufacturerPart: cell('manufacturerPart'),
         description: cell('description') || part,
-        price,
-        priceLabel: price != null ? '' : '(call for price)',
+        price: sell,
+        priceLabel: sell != null ? '' : '(call for price)',
         condition: cell('condition') || 'new',
         thumbnail: cell('image') || '',
         image: cell('image') || '',
         link: cell('link') || distributor.website || '',
         updatedAt: now,
+        lastSeenInList: now,
+        addedAt: now,
+        available: true,
+        availability: 'active',
         source: 'price-list',
       };
+      if (list != null) item.listPrice = list;
+      if (net != null) item.netPrice = net;
+      if (qty != null) item.quantity = qty;
+      if (cell('uom')) item.uom = cell('uom');
+      if (extra) item.extra = extra;
+      if (priceHistEntry) item.priceHistory = [priceHistEntry];
       byKey.set(keyOf(part), item);
       mine.push(item);
+      if (addedSample.length < 50) addedSample.push({ part, description: (item.description || '').slice(0, 48), price: sell });
       added++;
     }
   }
 
+  // Parts we have for this vendor (from a prior price list) that are NOT in this file →
+  // candidate discontinued = can't be sold. Non-destructive: we FLAG (available=false),
+  // never delete.
+  //
+  // GUARD: a vendor may send a PARTIAL list (one category). If this file covers only a
+  // small fraction of what we already had, treat absent parts as "not in this upload"
+  // rather than mass-discontinuing them — otherwise sales would see hundreds of false
+  // "unavailable" flags. Only when coverage is high do absences mean discontinued.
+  // coverage = how many parts we already had did this file re-list (updated / prior).
+  const coverage = priorCount > 0 ? updated / priorCount : 1;
+  const partialUpload = priorCount >= 20 && coverage < 0.5;
+  const discontinued = [];      // newly flagged unavailable this import
+  const stillMissing = [];      // already-flagged, still absent
+  if (!partialUpload) {
+    for (const it of mine) {
+      if (it.source !== 'price-list') continue;
+      const k = keyOf(it.addisonPart || it.manufacturerPart || it.id);
+      if (seenKeys.has(k)) continue;
+      const firstMiss = !it.missingSince;
+      if (firstMiss) it.missingSince = now;
+      it.missedImports = (it.missedImports || 0) + 1;
+      it.available = false;
+      it.availability = 'discontinued';
+      const rec = { part: it.addisonPart || it.id, description: (it.description || '').slice(0, 48), missingSince: it.missingSince, missedImports: it.missedImports, lastPrice: it.price ?? it.netPrice ?? it.listPrice ?? null };
+      if (firstMiss) discontinued.push(rec); else stillMissing.push(rec);
+    }
+  }
+  const missing = [...discontinued, ...stillMissing];
+
   const nextStore = writeCatalogStore([...others, ...mine]);
+  // Learn / refresh this vendor's layout (incl. full header list for drift detection next time).
+  const mapping = Object.fromEntries(Object.entries(cols).map(([field, idx]) => [field, headerCells[idx] || '']));
+  const profile = writeImportProfile(distributor.id, { headerRow, columns: mapping, headers: headerCells.filter(Boolean), priceMode });
+
+  // Biggest movers first — that's what "be aware ASAP" means.
+  movers.sort((a, b) => Math.abs(b.deltaPct || 0) - Math.abs(a.deltaPct || 0));
+  const changes = {
+    added, priceUp, priceDown, unchanged,
+    discontinued: discontinued.length, stillUnavailable: stillMissing.length,
+    partialUpload, coverage: round2(coverage),
+    newColumns, removedColumns, formatWarnings,
+    topMovers: movers.slice(0, 12), addedSample: addedSample.slice(0, 12), discontinuedSample: discontinued.slice(0, 12),
+  };
+  // Persist the event so "what changed and when" is browsable later (per-vendor change feed).
+  appendChangeLog(distributor.id, {
+    at: now, distributor: distributor.name, headerRow: headerRow + 1, priceMode, partialUpload, coverage: round2(coverage),
+    counts: { added, updated, priceUp, priceDown, unchanged, discontinued: discontinued.length },
+    newColumns, removedColumns, formatWarnings,
+    topMovers: movers.slice(0, 25), addedSample: addedSample.slice(0, 25), discontinuedSample: discontinued.slice(0, 25),
+  });
+
   res.json({
     ok: true,
     distributor: distributor.name,
     added,
     updated,
     skipped,
+    sections,
+    withNet,
+    withList,
+    priceMode,
+    learned: !savedProfile, // first time we saw this vendor's layout
+    headerRow: headerRow + 1, // 1-based for humans
+    headers: headerCells,
+    mapping,
+    profile,
+    changes,
     totalForDistributor: mine.length,
     totalCatalog: nextStore.items.length,
     updatedAt: nextStore.updatedAt,
   });
+});
+
+// Per-vendor change feed — recent imports with movers + format drift (and a global view).
+app.get('/api/distributors/:id/changes', (req, res) => {
+  const distributor = DISTRIBUTORS.find(d => d.id === req.params.id);
+  if (!distributor) return res.status(404).json({ error: 'Unknown distributor' });
+  res.json({ distributor: distributor.id, events: readChangeLog()[distributor.id] || [] });
+});
+
+// Availability — parts that can't be sold (discontinued / not in latest list). Consumed by the
+// Nexus sales dashboard so reps don't quote something that isn't available. ?id= filters a vendor.
+app.get('/api/availability', (req, res) => {
+  const store = readCatalogStore();
+  const id = String(req.query.id || '').trim();
+  const items = store.items.filter(it => (!id || it.distributorId === id));
+  const unavailable = items.filter(it => it.available === false).map(it => ({
+    distributorId: it.distributorId, distributor: it.distributor,
+    part: it.addisonPart || it.id, description: it.description,
+    availability: it.availability || 'discontinued', missingSince: it.missingSince || null,
+    missedImports: it.missedImports || 0, lastPrice: it.price ?? it.netPrice ?? it.listPrice ?? null,
+  }));
+  const total = items.length;
+  const available = items.filter(it => it.available !== false).length;
+  res.json({ updatedAt: store.updatedAt, total, available, unavailable });
+});
+app.get('/api/changes', (req, res) => {
+  const all = readChangeLog();
+  const flat = [];
+  for (const [distId, events] of Object.entries(all)) for (const e of (events || [])) flat.push({ distributorId: distId, ...e });
+  flat.sort((a, b) => (a.at < b.at ? 1 : -1));
+  res.json({ events: flat.slice(0, 100) });
+});
+
+// View / set / forget a distributor's saved import format profile (admin correction surface).
+app.get('/api/distributors/:id/import-profile', (req, res) => {
+  const distributor = DISTRIBUTORS.find(d => d.id === req.params.id);
+  if (!distributor) return res.status(404).json({ error: 'Unknown distributor' });
+  res.json({ distributor: distributor.id, profile: readImportProfiles()[distributor.id] || null });
+});
+app.put('/api/distributors/:id/import-profile', (req, res) => {
+  const distributor = DISTRIBUTORS.find(d => d.id === req.params.id);
+  if (!distributor) return res.status(404).json({ error: 'Unknown distributor' });
+  const existing = readImportProfiles()[distributor.id] || {};
+  const columns = (req.body?.columns && typeof req.body.columns === 'object') ? req.body.columns : existing.columns || {};
+  const priceMode = (req.body?.priceMode === 'net' || req.body?.priceMode === 'list') ? req.body.priceMode : existing.priceMode || 'list';
+  const headerRow = Number.isInteger(req.body?.headerRow) ? req.body.headerRow : existing.headerRow ?? 0;
+  res.json({ ok: true, profile: writeImportProfile(distributor.id, { headerRow, columns, priceMode }) });
+});
+app.delete('/api/distributors/:id/import-profile', (req, res) => {
+  const distributor = DISTRIBUTORS.find(d => d.id === req.params.id);
+  if (!distributor) return res.status(404).json({ error: 'Unknown distributor' });
+  const all = readImportProfiles();
+  delete all[distributor.id];
+  writeFileSync(IMPORT_PROFILES_FILE, JSON.stringify(all, null, 2));
+  res.json({ ok: true });
 });
 
 app.post('/api/distributors/:id/refresh', async (req, res) => {
