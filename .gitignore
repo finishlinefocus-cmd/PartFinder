@@ -5,3 +5,4 @@ client/node_modules/
 .env
 .DS_Store
 *.save
+qbo-tokens.json

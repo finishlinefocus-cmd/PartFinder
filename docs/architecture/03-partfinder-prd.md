@@ -10,6 +10,10 @@ PartFinder is the part and vendor intelligence layer. It helps the team answer:
 - Which vendor has the best price?
 - Which vendor can actually ship it soon?
 - Is this price current, login-gated, from a monthly sheet, or public catalog data?
+- Do we already have it in stock, and where? (inventory)
+- What does it cost us, and what should we sell it for at a healthy margin? (pricing)
+
+PartFinder lives under shared **tools**, so any department can open it. The UI is organized into clearly separated **lanes**, and a role-aware **Home** dashboard surfaces the lane each department uses most (sales → pricing, field → availability, accounting → cost) without hiding the others. See [Lanes And Role Dashboards](#lanes-and-role-dashboards).
 
 ## Current Shape
 
@@ -21,16 +25,46 @@ PartFinder currently has:
 - public vendor/OEM source records
 - search across distributor, category, Addison part, manufacturer part, and description
 - optional external search sources
+- a **self-adapting vendor price-list importer** that ingests real vendor CSV/XLSX exports as-is, captures both list and net (our cost) pricing, learns each vendor's column layout, and produces a change report instead of overwriting — see [Price Data Strategy](../PRICE-DATA-STRATEGY.md) for the full pipeline
 
 Current limitations:
 
 - part identity is flat, not canonical
 - `manufacturerPart` is overloaded with replacement and discontinued prose
 - cross-references are implicit
-- availability is not modeled
-- price confidence is not modeled
-- vendor offers are mixed into catalog items
+- price confidence is not yet a first-class scored field
+- vendor offers are mixed into catalog items (the importer writes back to flat catalog rows, not separate offer records)
 - duplicate/colliding IDs exist for some public-source rows
+
+Already addressed by the importer:
+
+- availability is now modeled at the row level (`available` / `availability` / `missingSince`) — parts absent from a full re-import are flagged discontinued, never deleted
+- per-part `priceHistory[]` snapshots and a per-vendor + global change feed capture price moves over time
+
+## Lanes And Role Dashboards
+
+PartFinder is a multi-lane sourcing hub. The client (`client/src/App.jsx`) presents six tabs plus a "Viewing as" department switcher:
+
+| Lane | Purpose | Backing |
+|---|---|---|
+| **Home** | Role-aware dashboard. Renders the department's primary lane as a large tile plus quick-link tiles with live stats (stock counts, parts costed, flagged-unavailable count, vendor/catalog counts), and a "stock needing attention" list. | `GET /api/inventory`, `GET /api/cost`, `GET /api/availability` |
+| **Price Search** | Existing live price search (saved catalog + BigQuery/Apify/SerpAPI). | `GET /api/search` |
+| **Availability** | "Do we already have it on the shelf?" — matches a part against our stock, showing on-hand/reserved/available, bin, and location, with in-stock / low / out status. | `GET /api/inventory` (Sortly) |
+| **Pricing Engine** | Pulls our cost, sets it against the market price, computes margin, and suggests a competitive retail price. Live, client-side recompute of target margin / competitor price / manual retail override. | `GET /api/cost` (layered) |
+| **Price Lists** | Distributor price-list importer + column-mapping editor (unchanged). | import endpoints |
+| **Changes & Alerts** | Global change feed + availability flags (unchanged). | `GET /api/changes`, `GET /api/availability` |
+
+**Role model.** Department is chosen manually for now via the header switcher (`sales` / `field` / `accounting`); the design anticipates Nexus passing a role in on load. Role only changes which lane Home surfaces first — every lane stays open to everyone (`ROLES` and `HOME_TILES` in `App.jsx`).
+
+**Availability source (Sortly).** `GET /api/inventory?q=` is served by `searchInventory()` in `server.js`, reading a mock stock file (`mockSortlyInventory.json`) and annotating each row with `available` (on-hand − reserved) and a `status` (`in_stock` / `low_stock` / `out_of_stock`). Going live means replacing only that one function body with a Sortly API call mapped onto the same shape — the route, response, and frontend are unchanged.
+
+**Pricing Engine cost (layered).** `GET /api/cost?q=` resolves "our cost" via `searchCosts()` in priority order, first source with a hit wins, each result tagged with a `costSource`:
+
+1. **QuickBooks Online** — live `Item.PurchaseCost`, env-gated (`QBO_CLIENT_ID`, `QBO_CLIENT_SECRET`, `QBO_REALM_ID`, `QBO_REFRESH_TOKEN`, optional `QBO_ENV=sandbox`). OAuth2 refresh-token flow; the rotating refresh token is persisted to `qbo-tokens.json` (git-ignored). **Note:** the production QBO file currently holds only service items (no costed inventory), so this layer is dormant until costed `Item`s exist.
+2. **Vendor net price** — the importer's captured `netPrice` column (our actual cost source). Dormant until a vendor list is imported in net mode.
+3. **Mock sample data** — `mockQboCosts.json`, so the lane always demos.
+
+The suggested-retail rule (`computePricing()` in `App.jsx`): price at the target margin, slip just under a known market price to stay competitive, but never below a 20% margin floor — and say which case applied.
 
 ## Required Data Model
 
@@ -134,9 +168,13 @@ FieldCam should not directly order from vendors unless a future workflow explici
 
 The current PartFinder repository contains a React/Vite client and Express API. The important local files are:
 
-- `client/src/App.jsx`: search UI and distributor catalog UI.
-- `server.js`: API routes, source connectors, public catalog parsing, BigQuery/Apify/SerpAPI search, and local catalog persistence.
+- `client/src/App.jsx`: tabbed UI with a "Viewing as" role switcher — Home (role-aware dashboard), Price Search, Availability (Sortly stock check), Pricing Engine (cost → margin → suggested retail), Price Lists (the import column-mapping editor: per-vendor dropdowns, List/Net headline toggle, re-import, and a "what changed" results panel), and Changes & Alerts (consumes the global change feed + availability). See [Lanes And Role Dashboards](#lanes-and-role-dashboards).
+- `server.js`: API routes, source connectors, public catalog parsing, the price-list importer (header detection, fuzzy mapping, change detection), BigQuery/Apify/SerpAPI search, the inventory + layered cost endpoints, and local catalog persistence. `express.json()` runs at a `64mb` limit so large vendor lists (Door Controls ≈527KB, Sortly ≈317KB) don't 413.
 - `distributorCatalog.json`: refreshed local distributor catalog rows.
+- `mockSortlyInventory.json`: mock Sortly stock for the Availability lane (replace with the live Sortly API).
+- `mockQboCosts.json`: mock cost data for the Pricing Engine's fallback layer.
+- `distributorImportProfiles.json`: per-vendor learned import format profiles (header row, column→header-name mapping, `priceMode`).
+- `distributorChangeLog.json`: per-vendor import event log (last 50/vendor) backing the change feed.
 - `sources.json`: configured source channels.
 - `package.json`: server scripts, including `dev`, `dev:all`, and launch/autostart helpers.
 
@@ -147,10 +185,17 @@ Current API endpoints:
 | `GET /api/sources` | List configured sources and whether optional services are configured. |
 | `GET /api/distributors` | List distributors/manufacturers, connection status, categories, source URLs, item counts. |
 | `GET /api/distributor-catalog?q=&distributor=` | Search saved catalog rows. |
+| `POST /api/distributors/:id/import` | Import a vendor price list (CSV/TSV); returns a non-destructive change report (added/up/down/unchanged/discontinued, movers, format drift). |
+| `GET/PUT/DELETE /api/distributors/:id/import-profile` | View / pin-correct / forget a vendor's learned column mapping and headline `priceMode`. |
+| `GET /api/distributors/:id/changes` | Per-vendor import event feed (recent movers + format-drift warnings). |
+| `GET /api/changes` | Global recent-changes feed across all vendors. |
+| `GET /api/availability?id=` | Parts that can't be sold (discontinued / absent from latest list); optional vendor filter. |
 | `POST /api/distributors/:id/refresh` | Refresh one configured source. |
 | `POST /api/distributors/refresh-automatics-and-more` | Refresh Automatics & More categories. |
 | `POST /api/distributors/refresh-connected` | Refresh all connected public/catalog sources. |
 | `GET /api/search?q=&condition=` | Merge saved catalog, BigQuery, Apify, and SerpAPI search results. |
+| `GET /api/inventory?q=` | Availability lane: match a part against our stock (Sortly; mock today). Returns rows annotated with `available`, `status` (`in_stock`/`low_stock`/`out_of_stock`), bin, and location. |
+| `GET /api/cost?q=` | Pricing Engine: layered cost lookup (QBO → vendor net price → mock). Each row carries a `costSource`. |
 
 ## Product Goals
 
@@ -164,7 +209,7 @@ Current API endpoints:
 
 ## Non-Goals
 
-- PartFinder does not create QBO, ShipStation, or vendor ordering transactions in the first release.
+- PartFinder does not create QBO, ShipStation, or vendor ordering transactions in the first release. (It may *read* QBO item cost for the Pricing Engine, read-only.)
 - PartFinder does not own customer conversation, case, or field visit lifecycle.
 - PartFinder does not guarantee live availability unless the source is explicitly real-time.
 - PartFinder does not treat public or scraped source data as equal to approved vendor feeds.
@@ -259,13 +304,16 @@ Confidence should explain why the system trusts a result:
 
 ## Price Sheet Ingestion
 
-Price sheet support should:
+A first-generation price-list importer now ships (`POST /api/distributors/:id/import`). Real vendor files never match a fixed template, so the importer adapts to the file rather than forcing the file to adapt to us. Full detail lives in [Price Data Strategy](../PRICE-DATA-STRATEGY.md); the highlights:
 
-- Accept CSV first, then XLSX and PDF-derived table imports later.
-- Store original file reference, vendor, version, import timestamp, row count, row errors, and mapping configuration.
-- Detect new SKUs, removed SKUs, price changes, availability changes, and changed descriptions.
-- Require staff review before publishing large imports.
-- Preserve historical price for quote audit and vendor trend reporting.
+- Accepts CSV/TSV (and pasted XLSX exports) today; PDF-derived tables remain future work.
+- **Adapts to the file:** auto-detects the header row under title/preamble banners, fuzzy-matches columns by name plus content sampling, treats one-cell `BUTT HINGES`-style rows as a running category, and rounds vendor float noise to 2dp. A price/cost column whose values are all ≤1 is rejected as a percentage (this fixed a real bug where SDC's `50% DISC` column was being read as money).
+- **Captures both prices:** `listPrice` (MSRP) and `netPrice` (our cost — net aliases broadened to discount/dealer/jobber/wholesale/disc). `priceMode` (`list` | `net`) picks the headline; net is always stored regardless.
+- **Learns each vendor's layout** to `distributorImportProfiles.json` and reuses it next upload by matching columns by header *name* (survives reordering). An admin can pin/correct a column (`overrides`) or change the headline price; profile CRUD is exposed at `GET/PUT/DELETE /api/distributors/:id/import-profile`.
+- **Non-destructive change detection:** on re-import, counts added / price-up / price-down / unchanged / discontinued, reports biggest movers, and surfaces new/removed columns plus format-drift warnings. Unknown columns are captured into `item.extra` so data is never dropped. Parts absent from a full re-import are flagged `available: false`; a partial-upload coverage guard prevents mass false "discontinued" when only part of a list is uploaded.
+- **Preserves history:** per-part `priceHistory[]` (capped 24) and a per-vendor + global change feed (`distributorChangeLog.json`, exposed at `GET /api/distributors/:id/changes`, `GET /api/changes`, and `GET /api/availability`).
+
+Validated against five real vendor files (Direct Hardware, Door Controls, SDC, BEA 2026 6%-tariff, Sortly export). Still to do: original-file archival with a stored mapping/version record, a formal staff-review gate before publishing large imports, and separating offers out of flat catalog rows.
 
 ## Best-Buy Recommendation
 
@@ -340,6 +388,6 @@ FieldCam uses PartFinder for:
 - Which vendors get approved feed/API outreach first?
 - Which price sheet formats are available and how often are they updated?
 - What confidence threshold is required before a result can appear in a customer-facing quote?
-- Should PartFinder store inventory snapshots or query Sortly live?
+- Should PartFinder store inventory snapshots or query Sortly live? (The Availability lane reads a single `GET /api/inventory` endpoint, mock today; the open question is whether the live implementation queries Sortly per-request or syncs periodic snapshots.)
 - How should staff review queues be assigned?
 - What retention policy applies to raw imported price sheets and scraped source payloads?

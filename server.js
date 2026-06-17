@@ -9,6 +9,8 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 4001;
 const CATALOG_FILE = './distributorCatalog.json';
+const MOCK_INVENTORY_FILE = './mockSortlyInventory.json';
+const MOCK_QBO_COSTS_FILE = './mockQboCosts.json';
 
 const DISTRIBUTORS = [
   {
@@ -2135,6 +2137,195 @@ async function searchApify(searchTerm) {
     };
   }).filter(r => r.title !== 'Untitled part' && r.price > 0);
 }
+
+// ── Inventory (Sortly) ───────────────────────────────────────────────────────
+// Availability lane: "do we already have this part on the shelf?". Today this reads
+// a MOCK stock file. To go live, replace the body of searchInventory() with a call
+// to the Sortly API (GET /api/v1/items?search=...) and map fields onto the same
+// shape below — nothing else (route, frontend) needs to change.
+const LOW_STOCK_THRESHOLD = 2; // available at or below this (but > 0) reads as "low"
+
+function readInventoryStore() {
+  if (!existsSync(MOCK_INVENTORY_FILE)) return { updatedAt: null, items: [] };
+  try {
+    const data = JSON.parse(readFileSync(MOCK_INVENTORY_FILE, 'utf-8'));
+    return { updatedAt: data.updatedAt || null, items: Array.isArray(data.items) ? data.items : [] };
+  } catch (err) {
+    console.error('Inventory read error:', err.message);
+    return { updatedAt: null, items: [] };
+  }
+}
+
+function stockStatus(available) {
+  if (available <= 0) return 'out_of_stock';
+  if (available <= LOW_STOCK_THRESHOLD) return 'low_stock';
+  return 'in_stock';
+}
+
+// Returns matching stock records, each annotated with available qty + status.
+function searchInventory(query) {
+  const needle = String(query || '').trim().toLowerCase();
+  const { updatedAt, items } = readInventoryStore();
+  const annotate = (it) => {
+    const onHand = Number(it.onHand) || 0;
+    const reserved = Number(it.reserved) || 0;
+    const available = Math.max(0, onHand - reserved);
+    return { ...it, onHand, reserved, available, status: stockStatus(available) };
+  };
+  if (!needle) return { updatedAt, source: 'mock', items: items.map(annotate) };
+  const tokens = needle.split(/\s+/).filter(Boolean);
+  const matches = items.filter((it) => {
+    const haystack = [it.sku, it.name, it.partNumber, it.manufacturerPart, it.manufacturer, it.folder]
+      .filter(Boolean).join(' ').toLowerCase();
+    return tokens.some((t) => haystack.includes(t));
+  });
+  return { updatedAt, source: 'mock', items: matches.map(annotate) };
+}
+
+app.get('/api/inventory', (req, res) => {
+  const { q } = req.query;
+  res.json(searchInventory(q));
+});
+
+// ── Cost ("what does this part cost us?") ────────────────────────────────────
+// The Pricing Engine resolves cost in priority order, first source with a hit wins:
+//   1. QuickBooks Online  — live Item.PurchaseCost (env-gated; see QBO_* below)
+//   2. Vendor net price   — the "net" column captured by the price-list importer
+//   3. Mock sample data   — so the lane always demos even before 1 or 2 have data
+// Every returned item carries a costSource so the UI can show provenance.
+const tokenize = (q) => String(q || '').trim().toLowerCase().split(/\s+/).filter(Boolean);
+const matchesTokens = (haystackParts, tokens) => {
+  const hay = haystackParts.filter(Boolean).join(' ').toLowerCase();
+  return tokens.some((t) => hay.includes(t));
+};
+
+// --- Source 3: mock cost file ---
+function readCostStore() {
+  if (!existsSync(MOCK_QBO_COSTS_FILE)) return { updatedAt: null, items: [] };
+  try {
+    const data = JSON.parse(readFileSync(MOCK_QBO_COSTS_FILE, 'utf-8'));
+    return { updatedAt: data.updatedAt || null, items: Array.isArray(data.items) ? data.items : [] };
+  } catch (err) {
+    console.error('Cost read error:', err.message);
+    return { updatedAt: null, items: [] };
+  }
+}
+function searchMockCosts(query) {
+  const tokens = tokenize(query);
+  const { items } = readCostStore();
+  const matched = !tokens.length ? items
+    : items.filter((it) => matchesTokens([it.name, it.partNumber, it.manufacturerPart, it.manufacturer], tokens));
+  return matched.map((it) => ({ ...it, costSource: 'mock' }));
+}
+
+// --- Source 2: vendor net price from imported price lists ---
+function searchCatalogNetCosts(query) {
+  const tokens = tokenize(query);
+  const { items } = readCatalogStore();
+  const withNet = items.filter((r) => r.netPrice != null && !Number.isNaN(Number(r.netPrice)));
+  const matched = !tokens.length ? withNet
+    : withNet.filter((r) => matchesTokens([r.description, r.addisonPart, r.manufacturerPart, r.distributor, r.category], tokens));
+  return matched.map((r) => ({
+    qboItemId: 'cat-' + r.id,
+    name: r.description || r.addisonPart || r.manufacturerPart || 'Part',
+    partNumber: r.addisonPart || r.manufacturerPart || '',
+    manufacturerPart: r.manufacturerPart || '',
+    manufacturer: '',
+    unitCost: Number(r.netPrice),
+    distributor: r.distributor || '',
+    costSource: 'vendor-net',
+  }));
+}
+
+// --- Source 1: live QuickBooks Online (env-gated, OAuth2 refresh-token flow) ---
+// Set QBO_CLIENT_ID, QBO_CLIENT_SECRET, QBO_REALM_ID, QBO_REFRESH_TOKEN (and
+// optionally QBO_ENV=sandbox) to activate. Intuit rotates the refresh token on each
+// refresh, so the latest is persisted to QBO_TOKENS_FILE and reused on the next boot.
+const QBO_TOKENS_FILE = './qbo-tokens.json';
+let qboAccessToken = null;
+let qboAccessTokenExpiry = 0; // epoch ms
+function qboConfigured() {
+  return Boolean(process.env.QBO_CLIENT_ID && process.env.QBO_CLIENT_SECRET && process.env.QBO_REALM_ID
+    && (process.env.QBO_REFRESH_TOKEN || existsSync(QBO_TOKENS_FILE)));
+}
+function qboApiBase() {
+  return process.env.QBO_ENV === 'sandbox'
+    ? 'https://sandbox-quickbooks.api.intuit.com'
+    : 'https://quickbooks.api.intuit.com';
+}
+function qboRefreshToken() {
+  if (existsSync(QBO_TOKENS_FILE)) {
+    try { return JSON.parse(readFileSync(QBO_TOKENS_FILE, 'utf-8')).refresh_token; } catch { /* fall through */ }
+  }
+  return process.env.QBO_REFRESH_TOKEN;
+}
+async function qboGetAccessToken() {
+  if (qboAccessToken && Date.now() < qboAccessTokenExpiry - 60000) return qboAccessToken;
+  const basic = Buffer.from(`${process.env.QBO_CLIENT_ID}:${process.env.QBO_CLIENT_SECRET}`).toString('base64');
+  const body = new URLSearchParams({ grant_type: 'refresh_token', refresh_token: qboRefreshToken() });
+  const resp = await fetch('https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer', {
+    method: 'POST',
+    headers: { Authorization: `Basic ${basic}`, 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
+    body,
+  });
+  if (!resp.ok) throw new Error(`token refresh ${resp.status}: ${await resp.text()}`);
+  const tok = await resp.json();
+  qboAccessToken = tok.access_token;
+  qboAccessTokenExpiry = Date.now() + (Number(tok.expires_in) || 3600) * 1000;
+  if (tok.refresh_token) {
+    try { writeFileSync(QBO_TOKENS_FILE, JSON.stringify({ refresh_token: tok.refresh_token, updatedAt: new Date().toISOString() }, null, 2)); }
+    catch (e) { console.error('Could not persist QBO refresh token:', e.message); }
+  }
+  return qboAccessToken;
+}
+async function searchQboCosts(query) {
+  const token = await qboGetAccessToken();
+  const url = `${qboApiBase()}/v3/company/${process.env.QBO_REALM_ID}/query?minorversion=70`;
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/text', Accept: 'application/json' },
+    body: 'SELECT Id, Name, Sku, Description, PurchaseCost, Type FROM Item WHERE Active = true MAXRESULTS 1000',
+  });
+  if (!resp.ok) throw new Error(`item query ${resp.status}: ${await resp.text()}`);
+  const data = await resp.json();
+  const items = (data.QueryResponse && data.QueryResponse.Item) || [];
+  const tokens = tokenize(query);
+  const withCost = items.filter((it) => it.PurchaseCost != null);
+  const matched = !tokens.length ? withCost
+    : withCost.filter((it) => matchesTokens([it.Name, it.Sku, it.Description], tokens));
+  return matched.map((it) => ({
+    qboItemId: it.Id,
+    name: it.Name || '',
+    partNumber: it.Sku || it.Name || '',
+    manufacturerPart: '',
+    manufacturer: '',
+    unitCost: Number(it.PurchaseCost) || 0,
+    costSource: 'qbo',
+  }));
+}
+
+// Layered resolver: first source with a match wins.
+async function searchCosts(query) {
+  if (qboConfigured()) {
+    try {
+      const qbo = await searchQboCosts(query);
+      if (qbo.length) return { source: 'qbo', items: qbo };
+    } catch (err) {
+      console.error('QBO cost lookup failed, falling back:', err.message);
+    }
+  }
+  const net = searchCatalogNetCosts(query);
+  if (net.length) return { source: 'vendor-net', items: net };
+  return { source: 'mock', items: searchMockCosts(query) };
+}
+
+app.get('/api/cost', async (req, res) => {
+  try {
+    res.json(await searchCosts(req.query.q));
+  } catch (err) {
+    res.status(500).json({ error: err.message, items: [] });
+  }
+});
 
 app.get('/api/search', async (req, res) => {
   const { q, condition } = req.query;

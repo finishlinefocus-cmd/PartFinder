@@ -16,8 +16,43 @@ function splitCategory(rawName) {
   return { company: name || 'Uncategorized', sub: '' };
 }
 
+// PartFinder lives under shared "tools", so every department can open every lane.
+// A user's department only decides which lane Home surfaces first. Role is picked
+// manually for now via the header switcher; later Nexus can pass it in on load.
+const ROLES = {
+  sales:      { label: 'Sales',      home: 'pricing',      blurb: 'margin and suggested retail price' },
+  field:      { label: 'Field',      home: 'availability', blurb: 'what is in stock and where' },
+  accounting: { label: 'Accounting', home: 'pricing',      blurb: 'our cost and margin health' },
+};
+
+// Human labels for each lane. Used by Home so the copy stays in sync with the nav.
+const TAB_LABELS = {
+  home: 'Home',
+  search: 'Price Search',
+  availability: 'Availability',
+  pricing: 'Pricing Engine',
+  distributors: 'Price Lists',
+  changes: 'Changes & Alerts',
+};
+
+// Home dashboard tiles per department. The FIRST lane is the role's primary
+// (rendered large); the rest are quick links. Everyone can reach every lane.
+const HOME_TILES = {
+  sales: ['pricing', 'search', 'availability', 'changes'],
+  field: ['availability', 'search', 'pricing', 'changes'],
+  accounting: ['pricing', 'changes', 'distributors', 'availability'],
+};
+const TILE_META = {
+  search: { icon: '🔍', title: 'Price Search', desc: 'Live prices across Google, Amazon, eBay, Walmart.' },
+  availability: { icon: '📦', title: 'Availability', desc: 'What is on our shelves right now.' },
+  pricing: { icon: '💰', title: 'Pricing Engine', desc: 'Cost, margin, and a competitive retail price.' },
+  changes: { icon: '🔔', title: 'Changes & Alerts', desc: 'Price moves and parts to watch.' },
+  distributors: { icon: '📋', title: 'Price Lists', desc: 'Distributor catalogs and imports.' },
+};
+
 export default function App() {
-  const [activeTab, setActiveTab] = useState('search');
+  const [activeTab, setActiveTab] = useState('home');
+  const [role, setRole] = useState('sales'); // department lens for the Home dashboard
   const [query, setQuery] = useState('');
   const [partNumber, setPartNumber] = useState('');
   const [manufacturer, setManufacturer] = useState('');
@@ -57,6 +92,25 @@ export default function App() {
   const [availability, setAvailability] = useState(null); // { total, available, unavailable: [] }
   const [alertsLoading, setAlertsLoading] = useState(false);
   const [alertsError, setAlertsError] = useState('');
+  // Availability lane: "do we already have this on the shelf?" (Sortly, mock for now).
+  const [invQuery, setInvQuery] = useState('');
+  const [invResults, setInvResults] = useState([]);
+  const [invLoading, setInvLoading] = useState(false);
+  const [invSearched, setInvSearched] = useState(false);
+  const [invError, setInvError] = useState('');
+  // Pricing Engine lane: our cost (QBO, mock for now) -> margin -> suggested retail.
+  const [pcQuery, setPcQuery] = useState('');
+  const [pcCostItems, setPcCostItems] = useState([]);
+  const [pcSelected, setPcSelected] = useState(null);
+  const [pcLoading, setPcLoading] = useState(false);
+  const [pcSearched, setPcSearched] = useState(false);
+  const [pcError, setPcError] = useState('');
+  const [pcMarket, setPcMarket] = useState('');       // competitor / market price (string input)
+  const [pcTargetMargin, setPcTargetMargin] = useState('35'); // target margin %
+  const [pcRetailOverride, setPcRetailOverride] = useState(''); // manual retail (string)
+  // Home dashboard: small cross-lane summary for the role-aware tiles.
+  const [homeSummary, setHomeSummary] = useState(null);
+  const [homeLoading, setHomeLoading] = useState(false);
 
   useEffect(() => {
     loadDistributors();
@@ -67,7 +121,34 @@ export default function App() {
   // (and after an import, which bumps the catalog through loadCatalog/selectVendor).
   useEffect(() => {
     if (activeTab === 'changes') loadAlerts();
+    if (activeTab === 'home') loadHomeSummary();
   }, [activeTab]);
+
+  async function loadHomeSummary() {
+    setHomeLoading(true);
+    try {
+      const [invRes, costRes, availRes] = await Promise.all([
+        fetch('/api/inventory'),
+        fetch('/api/cost'),
+        fetch('/api/availability'),
+      ]);
+      const inv = await invRes.json();
+      const cost = await costRes.json();
+      const avail = await availRes.json();
+      const items = inv.items || [];
+      setHomeSummary({
+        inStock: items.filter(i => i.status === 'in_stock').length,
+        low: items.filter(i => i.status === 'low_stock').length,
+        out: items.filter(i => i.status === 'out_of_stock').length,
+        costCount: (cost.items || []).length,
+        unavailable: avail && Array.isArray(avail.unavailable) ? avail.unavailable.length : 0,
+        lowItems: items.filter(i => i.status === 'low_stock' || i.status === 'out_of_stock').slice(0, 4),
+      });
+    } catch {
+      setHomeSummary(null);
+    }
+    setHomeLoading(false);
+  }
 
   async function loadAlerts() {
     setAlertsLoading(true);
@@ -256,6 +337,115 @@ export default function App() {
     setLoading(false);
   }
 
+  async function runInventorySearch(e, override) {
+    if (e) e.preventDefault();
+    const q = (override != null ? override : invQuery).trim();
+    if (!q) {
+      setInvError('Enter a part name, number, or manufacturer to check stock.');
+      return;
+    }
+    setInvLoading(true);
+    setInvError('');
+    setInvSearched(true);
+    try {
+      const res = await fetch('/api/inventory?q=' + encodeURIComponent(q));
+      const data = await res.json();
+      setInvResults(data.items || []);
+    } catch (err) {
+      setInvError('Stock lookup failed: ' + err.message);
+      setInvResults([]);
+    }
+    setInvLoading(false);
+  }
+
+  async function runCostLookup(e, override) {
+    if (e) e.preventDefault();
+    const q = (override != null ? override : pcQuery).trim();
+    if (!q) {
+      setPcError('Enter a part name, number, or manufacturer to price it.');
+      return;
+    }
+    setPcLoading(true);
+    setPcError('');
+    setPcSearched(true);
+    setPcSelected(null);
+    setPcRetailOverride('');
+    try {
+      const res = await fetch('/api/cost?q=' + encodeURIComponent(q));
+      const data = await res.json();
+      const items = data.items || [];
+      setPcCostItems(items);
+      if (items.length > 0) setPcSelected(items[0]); // auto-pick the first match
+    } catch (err) {
+      setPcError('Cost lookup failed: ' + err.message);
+      setPcCostItems([]);
+    }
+    setPcLoading(false);
+  }
+
+  // Suggested competitive retail: aim for the target margin, but if a market price
+  // is known, slip just under it — never dropping below a 20% margin floor.
+  const MIN_MARGIN = 0.20;
+  function computePricing(cost, targetMarginPct, marketPrice) {
+    const tm = Math.max(0, Math.min(95, Number(targetMarginPct) || 0)) / 100;
+    const costPlus = tm < 1 ? cost / (1 - tm) : cost;
+    const floor = cost / (1 - MIN_MARGIN);
+    const market = Number(marketPrice) > 0 ? Number(marketPrice) : null;
+    let suggested, basis;
+    if (market) {
+      const competitive = market * 0.97; // sit a touch under the market price
+      suggested = Math.max(floor, Math.min(costPlus, competitive));
+      if (suggested >= costPlus - 0.005) basis = 'target'; // market had room for full target margin
+      else if (suggested <= floor + 0.005) basis = 'floor'; // market too tight, held the floor
+      else basis = 'undercut'; // priced just under market
+    } else {
+      suggested = costPlus;
+      basis = 'costplus';
+    }
+    suggested = Math.round(suggested * 100) / 100;
+    return { suggested, basis, market, floor };
+  }
+  const marginPct = (price, cost) => (price > 0 ? ((price - cost) / price) * 100 : 0);
+  const markupPct = (price, cost) => (cost > 0 ? ((price - cost) / cost) * 100 : 0);
+  const marginBadgeStyle = (m) => {
+    const base = { display: 'inline-block', fontSize: 11, fontWeight: 800, padding: '3px 10px', borderRadius: 20 };
+    if (m >= 30) return { ...base, background: '#E8F5EA', color: '#2F6F3E' };
+    if (m >= 15) return { ...base, background: '#FFF4D6', color: '#8A5A00' };
+    return { ...base, background: '#FCEBEB', color: '#A32D2D' };
+  };
+
+  const tileStat = (lane) => {
+    const s = homeSummary;
+    switch (lane) {
+      case 'availability': return s ? `${s.inStock} in stock · ${s.low} low · ${s.out} out` : '…';
+      case 'pricing': return s ? `${s.costCount} parts with cost on file` : '…';
+      case 'changes': return s ? `${s.unavailable} part${s.unavailable === 1 ? '' : 's'} flagged unavailable` : '…';
+      case 'distributors': return `${distributors.length} vendors · ${catalogItems.length} catalog parts`;
+      case 'search': return 'Google · Amazon · eBay · Walmart';
+      default: return '';
+    }
+  };
+  const renderHomeTile = (lane, primary) => {
+    const meta = TILE_META[lane];
+    return (
+      <button
+        key={lane}
+        onClick={() => setActiveTab(lane)}
+        style={{
+          textAlign: 'left', cursor: 'pointer', width: '100%', borderRadius: 12,
+          padding: primary ? 20 : 16,
+          border: primary ? '1px solid #185FA5' : '1px solid #e5e5e5',
+          background: primary ? '#F2F8FE' : '#fff',
+        }}
+      >
+        <div style={{ fontSize: primary ? 18 : 15, fontWeight: 700, marginBottom: 4 }}>{meta.icon} {meta.title}</div>
+        <div style={{ fontSize: 13, color: '#555', marginBottom: 8 }}>{meta.desc}</div>
+        <div style={{ fontSize: 13, fontWeight: 700, color: '#185FA5' }}>{tileStat(lane)}</div>
+        {primary && <div style={{ marginTop: 10, fontSize: 13, fontWeight: 700, color: '#185FA5' }}>Open {meta.title} →</div>}
+      </button>
+    );
+  };
+
   function sortedResults() {
     const copy = [...results];
     if (sortBy === 'price') return copy.sort((a, b) => a.price - b.price);
@@ -365,7 +555,11 @@ export default function App() {
     wrap: { maxWidth: 1100, margin: '0 auto', padding: '2rem 1rem', fontFamily: 'system-ui, sans-serif', color: '#222' },
     header: { fontSize: 28, fontWeight: 600, marginBottom: 4, letterSpacing: '-0.5px' },
     sub: { color: '#666', marginBottom: 24, fontSize: 14 },
-    tabs: { display: 'flex', gap: 8, marginBottom: 16, borderBottom: '1px solid #e5e5e5' },
+    topBar: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 12, flexWrap: 'wrap', borderBottom: '1px solid #e5e5e5', marginBottom: 16 },
+    tabs: { display: 'flex', gap: 8, flexWrap: 'wrap' },
+    roleSwitch: { display: 'flex', alignItems: 'center', gap: 8, paddingBottom: 8 },
+    roleSelect: { padding: '6px 10px', border: '1px solid #ddd', borderRadius: 8, fontSize: 13, fontWeight: 700, color: '#185FA5', background: '#fff', cursor: 'pointer' },
+    inlineButton: { padding: '10px 16px', background: '#185FA5', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' },
     tab: { padding: '10px 12px', border: 'none', borderBottom: '2px solid transparent', background: 'transparent', color: '#666', cursor: 'pointer', fontSize: 14, fontWeight: 600 },
     tabActive: { color: '#185FA5', borderBottomColor: '#185FA5' },
     card: { background: '#fff', border: '1px solid #e5e5e5', borderRadius: 12, padding: 20, marginBottom: 16 },
@@ -418,6 +612,13 @@ export default function App() {
     if (level === 'page-index' || level === 'category-index') return { ...styles.connectionBadge, background: '#FFF4D6', color: '#8A5A00' };
     return { ...styles.connectionBadge, background: '#FCEBEB', color: '#A32D2D' };
   };
+  const STOCK_LABELS = { in_stock: 'In stock', low_stock: 'Low stock', out_of_stock: 'Out of stock' };
+  const stockBadgeStyle = (status) => {
+    const base = { display: 'inline-block', fontSize: 11, fontWeight: 800, padding: '3px 10px', borderRadius: 20 };
+    if (status === 'in_stock') return { ...base, background: '#E8F5EA', color: '#2F6F3E' };
+    if (status === 'low_stock') return { ...base, background: '#FFF4D6', color: '#8A5A00' };
+    return { ...base, background: '#FCEBEB', color: '#A32D2D' };
+  };
 
   // Shared renderer for a list of catalog item rows (used at company level when there
   // is only a general sub-category, and within each part-type sub-category otherwise).
@@ -452,18 +653,270 @@ export default function App() {
       <h1 style={styles.header}>PartFinder</h1>
       <div style={styles.sub}>Search electronic parts and maintain distributor catalogs in one place.</div>
 
-      <div style={styles.tabs}>
-        <button style={{ ...styles.tab, ...(activeTab === 'search' ? styles.tabActive : {}) }} onClick={() => setActiveTab('search')}>Search</button>
-        <button style={{ ...styles.tab, ...(activeTab === 'distributors' ? styles.tabActive : {}) }} onClick={() => setActiveTab('distributors')}>Price Lists</button>
-        <button style={{ ...styles.tab, ...(activeTab === 'changes' ? styles.tabActive : {}) }} onClick={() => setActiveTab('changes')}>
-          Changes &amp; Alerts
-          {availability && availability.unavailable && availability.unavailable.length > 0 && (
-            <span style={{ marginLeft: 6, fontSize: 11, fontWeight: 700, padding: '1px 7px', borderRadius: 999, background: '#FCEBEB', color: '#A32D2D' }}>
-              {availability.unavailable.length}
-            </span>
-          )}
-        </button>
+      <div style={styles.topBar}>
+        <div style={styles.tabs}>
+          <button style={{ ...styles.tab, ...(activeTab === 'home' ? styles.tabActive : {}) }} onClick={() => setActiveTab('home')}>Home</button>
+          <button style={{ ...styles.tab, ...(activeTab === 'search' ? styles.tabActive : {}) }} onClick={() => setActiveTab('search')}>Price Search</button>
+          <button style={{ ...styles.tab, ...(activeTab === 'availability' ? styles.tabActive : {}) }} onClick={() => setActiveTab('availability')}>Availability</button>
+          <button style={{ ...styles.tab, ...(activeTab === 'pricing' ? styles.tabActive : {}) }} onClick={() => setActiveTab('pricing')}>Pricing Engine</button>
+          <button style={{ ...styles.tab, ...(activeTab === 'distributors' ? styles.tabActive : {}) }} onClick={() => setActiveTab('distributors')}>Price Lists</button>
+          <button style={{ ...styles.tab, ...(activeTab === 'changes' ? styles.tabActive : {}) }} onClick={() => setActiveTab('changes')}>
+            Changes &amp; Alerts
+            {availability && availability.unavailable && availability.unavailable.length > 0 && (
+              <span style={{ marginLeft: 6, fontSize: 11, fontWeight: 700, padding: '1px 7px', borderRadius: 999, background: '#FCEBEB', color: '#A32D2D' }}>
+                {availability.unavailable.length}
+              </span>
+            )}
+          </button>
+        </div>
+        <div style={styles.roleSwitch}>
+          <span style={{ fontSize: 12, color: '#666' }}>Viewing as</span>
+          <select style={styles.roleSelect} value={role} onChange={e => setRole(e.target.value)}>
+            {Object.entries(ROLES).map(([key, r]) => (
+              <option key={key} value={key}>{r.label}</option>
+            ))}
+          </select>
+        </div>
       </div>
+
+      {activeTab === 'home' && (
+        <>
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ fontSize: 18, fontWeight: 600 }}>{ROLES[role].label} dashboard</div>
+            <div style={{ color: '#666', fontSize: 13 }}>
+              Your team mostly works in <strong>{TAB_LABELS[ROLES[role].home]}</strong> ({ROLES[role].blurb}).
+              Every lane is open to everyone — switch your view top-right.
+            </div>
+          </div>
+
+          {renderHomeTile(HOME_TILES[role][0], true)}
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12, marginTop: 12 }}>
+            {HOME_TILES[role].slice(1).map(lane => renderHomeTile(lane, false))}
+          </div>
+
+          {homeSummary && homeSummary.lowItems.length > 0 && (
+            <div style={{ ...styles.card, marginTop: 12 }}>
+              <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 8 }}>Stock needing attention</div>
+              {homeSummary.lowItems.map(it => (
+                <div key={it.sku} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, padding: '6px 0', borderBottom: '1px solid #f0f0f0', fontSize: 13 }}>
+                  <span>{it.name} <span style={{ color: '#999' }}>· {it.partNumber}</span></span>
+                  <span style={stockBadgeStyle(it.status)}>{STOCK_LABELS[it.status]} ({it.available})</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {homeLoading && <div style={{ fontSize: 12, color: '#999', marginTop: 10 }}>Loading summary…</div>}
+        </>
+      )}
+
+      {activeTab === 'availability' && (
+        <>
+          <div style={styles.card}>
+            <div style={{ fontSize: 18, fontWeight: 600, marginBottom: 4 }}>📦 Availability</div>
+            <div style={{ color: '#666', fontSize: 13, marginBottom: 14 }}>
+              Check our own shelves before sourcing. Stock comes from Sortly (sample data for now).
+            </div>
+            <form onSubmit={runInventorySearch}>
+              <label style={styles.label}>Part name, number, or manufacturer</label>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input
+                  style={{ ...styles.input, flex: 1 }}
+                  value={invQuery}
+                  onChange={e => setInvQuery(e.target.value)}
+                  placeholder="e.g. Besam SW200, 1607, LiftMaster"
+                />
+                <button type="submit" style={{ ...styles.inlineButton, whiteSpace: 'nowrap' }} disabled={invLoading}>
+                  {invLoading ? 'Checking…' : 'Check stock'}
+                </button>
+              </div>
+            </form>
+            {(query || partNumber || manufacturer) && (
+              <button
+                style={{ ...styles.linkButton, marginTop: 10, display: 'inline-block' }}
+                onClick={() => {
+                  const q = [manufacturer, query, partNumber].filter(Boolean).join(' ');
+                  setInvQuery(q);
+                  runInventorySearch(null, q);
+                }}
+              >
+                Use my last Price Search ({[manufacturer, query, partNumber].filter(Boolean).join(' ')})
+              </button>
+            )}
+          </div>
+
+          {invError && <div style={styles.error}>{invError}</div>}
+
+          {invSearched && !invLoading && invResults.length === 0 && !invError && (
+            <div style={styles.empty}>
+              Not found in our inventory. It likely needs to be sourced — try the Price Search lane.
+            </div>
+          )}
+
+          {invResults.length > 0 && (
+            <>
+              <div style={{ fontSize: 12, color: '#666', marginBottom: 10 }}>
+                {invResults.length} match{invResults.length === 1 ? '' : 'es'} on our shelves
+              </div>
+              {invResults.map((it) => (
+                <div key={it.sku} style={styles.result}>
+                  <div style={styles.thumbPlaceholder}>{it.folder || 'Stock'}</div>
+                  <div>
+                    <div style={styles.title}>{it.name}</div>
+                    <div style={styles.source}>
+                      Part <strong>{it.partNumber || '—'}</strong>
+                      {it.manufacturerPart ? ` · Mfg ${it.manufacturerPart}` : ''}
+                      {it.manufacturer ? ` · ${it.manufacturer}` : ''}
+                    </div>
+                    <span style={stockBadgeStyle(it.status)}>{STOCK_LABELS[it.status]}</span>
+                    <span style={{ ...styles.badge, marginLeft: 6 }}>Bin {it.bin || '—'}</span>
+                    <span style={styles.badge}>{it.location || '—'}</span>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={styles.price}>{it.available}</div>
+                    <div style={styles.ship}>available</div>
+                    <div style={{ fontSize: 11, color: '#999' }}>
+                      {it.onHand} on hand · {it.reserved} reserved
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
+        </>
+      )}
+
+      {activeTab === 'pricing' && (
+        <>
+          <div style={styles.card}>
+            <div style={{ fontSize: 18, fontWeight: 600, marginBottom: 4 }}>💰 Pricing Engine</div>
+            <div style={{ color: '#666', fontSize: 13, marginBottom: 14 }}>
+              Pull our cost (QuickBooks, sample data for now), set against the market price, and get a competitive retail with the margin spelled out.
+            </div>
+            <form onSubmit={runCostLookup}>
+              <label style={styles.label}>Part name, number, or manufacturer</label>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input
+                  style={{ ...styles.input, flex: 1 }}
+                  value={pcQuery}
+                  onChange={e => setPcQuery(e.target.value)}
+                  placeholder="e.g. Besam SW200, 1607, LiftMaster"
+                />
+                <button type="submit" style={{ ...styles.inlineButton, whiteSpace: 'nowrap' }} disabled={pcLoading}>
+                  {pcLoading ? 'Looking up…' : 'Look up cost'}
+                </button>
+              </div>
+            </form>
+            {(query || partNumber || manufacturer) && (
+              <button
+                style={{ ...styles.linkButton, marginTop: 10, display: 'inline-block' }}
+                onClick={() => {
+                  const q = [manufacturer, query, partNumber].filter(Boolean).join(' ');
+                  setPcQuery(q);
+                  runCostLookup(null, q);
+                }}
+              >
+                Use my last Price Search ({[manufacturer, query, partNumber].filter(Boolean).join(' ')})
+              </button>
+            )}
+          </div>
+
+          {pcError && <div style={styles.error}>{pcError}</div>}
+
+          {pcSearched && !pcLoading && pcCostItems.length === 0 && !pcError && (
+            <div style={styles.empty}>No cost on file for that part in QuickBooks (sample data).</div>
+          )}
+
+          {pcCostItems.length > 1 && (
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+              {pcCostItems.map(it => (
+                <button
+                  key={it.qboItemId}
+                  style={{ ...styles.pill, ...(pcSelected?.qboItemId === it.qboItemId ? { borderColor: '#185FA5', background: '#E6F1FB', color: '#185FA5' } : {}) }}
+                  onClick={() => { setPcSelected(it); setPcRetailOverride(''); }}
+                >
+                  {it.partNumber} · {it.name}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {pcSelected && (() => {
+            const cost = Number(pcSelected.unitCost) || 0;
+            const pricing = computePricing(cost, pcTargetMargin, pcMarket);
+            const effectiveRetail = pcRetailOverride !== '' ? (Number(pcRetailOverride) || 0) : pricing.suggested;
+            const m = marginPct(effectiveRetail, cost);
+            const mk = markupPct(effectiveRetail, cost);
+            const tmShown = Math.max(0, Math.min(95, Number(pcTargetMargin) || 0));
+            const costSourceLabel = {
+              qbo: 'from QuickBooks',
+              'vendor-net': 'vendor net price' + (pcSelected.distributor ? ' · ' + pcSelected.distributor : ''),
+              mock: 'sample data',
+            }[pcSelected.costSource] || 'sample data';
+            const marketLowFromSearch = results.reduce((lo, r) => (r.price > 0 && (lo == null || r.price < lo) ? r.price : lo), null);
+            const rationale = {
+              costplus: `No market price entered — priced at your ${tmShown}% target margin (cost-plus).`,
+              target: `Market has room — set to your ${tmShown}% target margin, still under the $${pricing.market?.toFixed(2)} market price.`,
+              undercut: `Priced just under the $${pricing.market?.toFixed(2)} market price to stay competitive.`,
+              floor: `Market is tight — held to the ${(MIN_MARGIN * 100)}% minimum margin (you'd be at $${pricing.suggested.toFixed(2)} vs $${pricing.market?.toFixed(2)} market).`,
+            }[pricing.basis];
+            return (
+              <div style={styles.card}>
+                <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 2 }}>{pcSelected.name}</div>
+                <div style={styles.source}>
+                  Part <strong>{pcSelected.partNumber || '—'}</strong>
+                  {pcSelected.manufacturerPart ? ` · Mfg ${pcSelected.manufacturerPart}` : ''}
+                  {pcSelected.manufacturer ? ` · ${pcSelected.manufacturer}` : ''}
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginTop: 16 }}>
+                  <div>
+                    <label style={styles.label}>Our cost</label>
+                    <div style={{ fontSize: 22, fontWeight: 700 }}>${cost.toFixed(2)}</div>
+                    <div style={{ fontSize: 11, color: '#999' }}>{costSourceLabel}</div>
+                  </div>
+                  <div>
+                    <label style={styles.label}>Target margin %</label>
+                    <input style={styles.input} type="number" min="0" max="95" value={pcTargetMargin} onChange={e => setPcTargetMargin(e.target.value)} />
+                  </div>
+                  <div>
+                    <label style={styles.label}>Market / competitor price</label>
+                    <input style={styles.input} type="number" min="0" step="0.01" value={pcMarket} onChange={e => setPcMarket(e.target.value)} placeholder="optional" />
+                    {marketLowFromSearch != null && (
+                      <button style={{ ...styles.linkButton, marginTop: 6, display: 'inline-block', fontSize: 11 }} onClick={() => setPcMarket(String(marketLowFromSearch))}>
+                        Use search low (${marketLowFromSearch.toFixed(2)})
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div style={{ marginTop: 18, padding: 16, borderRadius: 10, background: '#F2F8FE', border: '1px solid #cfe3f7' }}>
+                  <div style={{ fontSize: 12, color: '#185FA5', fontWeight: 700, marginBottom: 2 }}>SUGGESTED RETAIL</div>
+                  <div style={{ fontSize: 30, fontWeight: 800, color: '#185FA5' }}>${pricing.suggested.toFixed(2)}</div>
+                  <div style={{ fontSize: 13, color: '#555', marginTop: 6 }}>{rationale}</div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginTop: 16, alignItems: 'end' }}>
+                  <div>
+                    <label style={styles.label}>Set your own retail</label>
+                    <input style={styles.input} type="number" min="0" step="0.01" value={pcRetailOverride} onChange={e => setPcRetailOverride(e.target.value)} placeholder={pricing.suggested.toFixed(2)} />
+                  </div>
+                  <div>
+                    <label style={styles.label}>Margin at ${effectiveRetail.toFixed(2)}</label>
+                    <span style={marginBadgeStyle(m)}>{m.toFixed(1)}% margin</span>
+                  </div>
+                  <div>
+                    <label style={styles.label}>Markup</label>
+                    <div style={{ fontSize: 16, fontWeight: 700 }}>{mk.toFixed(0)}%</div>
+                    <div style={{ fontSize: 11, color: '#999' }}>${(effectiveRetail - cost).toFixed(2)} profit / unit</div>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+        </>
+      )}
 
       {activeTab === 'search' && (
         <>
