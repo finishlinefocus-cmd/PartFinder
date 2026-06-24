@@ -95,6 +95,7 @@ export default function App() {
   // Availability lane: "do we already have this on the shelf?" (Sortly, mock for now).
   const [invQuery, setInvQuery] = useState('');
   const [invResults, setInvResults] = useState([]);
+  const [invSource, setInvSource] = useState(null); // 'nexus' (live) | 'mock'
   const [invLoading, setInvLoading] = useState(false);
   const [invSearched, setInvSearched] = useState(false);
   const [invError, setInvError] = useState('');
@@ -351,9 +352,11 @@ export default function App() {
       const res = await fetch('/api/inventory?q=' + encodeURIComponent(q));
       const data = await res.json();
       setInvResults(data.items || []);
+      setInvSource(data.source || null);
     } catch (err) {
       setInvError('Stock lookup failed: ' + err.message);
       setInvResults([]);
+      setInvSource(null);
     }
     setInvLoading(false);
   }
@@ -758,6 +761,11 @@ export default function App() {
             <>
               <div style={{ fontSize: 12, color: '#666', marginBottom: 10 }}>
                 {invResults.length} match{invResults.length === 1 ? '' : 'es'} on our shelves
+                {invSource === 'nexus'
+                  ? <span style={{ ...stockBadgeStyle('in_stock'), marginLeft: 8 }}>● Live from Nexus</span>
+                  : invSource === 'mock'
+                    ? <span style={{ ...styles.badge, marginLeft: 8 }}>sample data</span>
+                    : null}
               </div>
               {invResults.map((it) => (
                 <div key={it.sku} style={styles.result}>
@@ -850,6 +858,7 @@ export default function App() {
             const mk = markupPct(effectiveRetail, cost);
             const tmShown = Math.max(0, Math.min(95, Number(pcTargetMargin) || 0));
             const costSourceLabel = {
+              nexus: 'live from Nexus (Sortly)',
               qbo: 'from QuickBooks',
               'vendor-net': 'vendor net price' + (pcSelected.distributor ? ' · ' + pcSelected.distributor : ''),
               mock: 'sample data',
