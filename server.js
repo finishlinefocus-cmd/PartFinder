@@ -14,13 +14,14 @@ const MOCK_QBO_COSTS_FILE = './mockQboCosts.json';
 
 // ── Nexus live-inventory bridge config ───────────────────────────────────────
 // PartFinder reads LIVE stock + our-cost from the Nexus Support app's read-only
-// Sortly endpoint (GET {NEXUS_BASE_URL}/api/sortly/items?q=...). Nexus owns the
+// inventory feed (GET {NEXUS_BASE_URL}/api/inventory/feed?q=...). Nexus owns the
 // Sortly/QBO/Volusion joins; PartFinder never writes back. The bridge is OFF
-// unless NEXUS_SESSION_COOKIE is supplied, because Nexus protects the endpoint
-// with a cookie session (see docs/NEXUS-INVENTORY.md for how to mint one).
+// unless NEXUS_INVENTORY_TOKEN is supplied, because Nexus protects the endpoint
+// with a shared-secret token (Authorization: Bearer <token>). The token must
+// match Nexus's NEXUS_INGEST_TOKEN (see docs/NEXUS-INVENTORY.md).
 const NEXUS_BASE_URL = (process.env.NEXUS_BASE_URL || 'http://localhost:4800').replace(/\/+$/, '');
-const NEXUS_SESSION_COOKIE = process.env.NEXUS_SESSION_COOKIE || '';
-// Explicit kill-switch: NEXUS_ENABLED=false forces the bridge off even with a cookie.
+const NEXUS_INVENTORY_TOKEN = process.env.NEXUS_INVENTORY_TOKEN || '';
+// Explicit kill-switch: NEXUS_ENABLED=false forces the bridge off even with a token.
 const NEXUS_ENABLED = String(process.env.NEXUS_ENABLED ?? 'true').toLowerCase() !== 'false';
 const NEXUS_TIMEOUT_MS = Number(process.env.NEXUS_TIMEOUT_MS) || 8000;
 const NEXUS_CACHE_TTL_MS = Number(process.env.NEXUS_CACHE_TTL_MS) || 5 * 60 * 1000; // ~5 min
@@ -2152,7 +2153,7 @@ async function searchApify(searchTerm) {
 }
 
 // ── Nexus live-inventory client (READ-ONLY) ─────────────────────────────────
-// Calls the Nexus Support app's /api/sortly/items endpoint, which already joins
+// Calls the Nexus Support app's /api/inventory/feed endpoint, which already joins
 // Sortly on-hand, the QBO/Sortly our-cost, and live "available" (on-hand minus
 // shipped). PartFinder only ever GETs from Nexus — it never writes back to Nexus
 // or Sortly. Results are cached per normalized query for NEXUS_CACHE_TTL_MS so a
@@ -2160,7 +2161,7 @@ async function searchApify(searchTerm) {
 const LOW_STOCK_THRESHOLD = 2; // available at or below this (but > 0) reads as "low"
 
 function nexusConfigured() {
-  return NEXUS_ENABLED && Boolean(NEXUS_SESSION_COOKIE);
+  return NEXUS_ENABLED && Boolean(NEXUS_INVENTORY_TOKEN);
 }
 
 const nexusCache = new Map(); // normalizedQuery -> { at: epochMs, items: [...] }
@@ -2188,21 +2189,18 @@ async function fetchNexusItems(query) {
   const cached = nexusCacheGet(key);
   if (cached) return cached;
 
-  const url = `${NEXUS_BASE_URL}/api/sortly/items?q=${encodeURIComponent(key)}`;
-  const cookie = NEXUS_SESSION_COOKIE.includes('=')
-    ? NEXUS_SESSION_COOKIE
-    : `nexus_session=${NEXUS_SESSION_COOKIE}`;
+  const url = `${NEXUS_BASE_URL}/api/inventory/feed?q=${encodeURIComponent(key)}&refresh=0`;
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), NEXUS_TIMEOUT_MS);
   try {
     const resp = await fetch(url, {
       method: 'GET', // READ-ONLY — never POST/PUT/DELETE to Nexus.
-      headers: { Cookie: cookie, Accept: 'application/json' },
+      headers: { Authorization: `Bearer ${NEXUS_INVENTORY_TOKEN}`, Accept: 'application/json' },
       signal: controller.signal,
     });
     if (resp.status === 401 || resp.status === 403) {
-      console.error('Nexus inventory: unauthorized (NEXUS_SESSION_COOKIE expired or invalid). Falling back to local data.');
+      console.error('Nexus inventory: unauthorized (NEXUS_INVENTORY_TOKEN missing or does not match Nexus NEXUS_INGEST_TOKEN). Falling back to local data.');
       return [];
     }
     if (!resp.ok) {
@@ -2221,56 +2219,44 @@ async function fetchNexusItems(query) {
   }
 }
 
-// Nexus packs a human description into a pipe-delimited `details` blob, e.g.
-// "BEA | : 2026-02-23... | : Lockout Relay for Besam CUP MP - (BEA) | : 0.250 ...".
-// Pull out the most description-like segment so we show "Lockout Relay ..." rather
-// than the raw blob. Falls back to null if nothing looks like a description.
-function nexusDescription(details) {
-  if (!details) return null;
-  const segs = String(details)
-    .split('|')
-    .map((s) => s.replace(/^[\s:]+/, '').trim())
-    .filter(Boolean);
-  // Prefer the longest segment that contains letters and isn't a date/number/bin code.
-  const candidates = segs.filter((s) => /[a-z]/i.test(s) && !/^\d{4}-\d{2}-\d{2}/.test(s) && !/^[\d.]+$/.test(s));
-  candidates.sort((a, b) => b.length - a.length);
-  return candidates[0] || null;
-}
-
-// Map a Nexus/Sortly row onto PartFinder's inventory shape. In Nexus, `name` is
+// Map a Nexus inventory-feed row onto PartFinder's inventory shape. The feed
+// returns { name, sku, category, qty, price, ourCost, customerPrice,
+// walmartPrice, available, status }: `name` is the product/description, `sku` is
 // the A&M part number, `qty` is Sortly on-hand, and `available` is the live count
 // (on-hand minus shipped). We don't get bin/location from this endpoint.
 function nexusToInventoryItem(it) {
   const onHand = Number(it.qty) || 0;
   const available = it.available != null ? Number(it.available) : onHand;
-  const partNumber = it.name || it.sku || '';
-  const title = it.volusionName || nexusDescription(it.details) || partNumber;
+  const partNumber = it.sku || it.name || '';
+  const title = it.name || partNumber;
   return {
     sku: it.sku || partNumber,
     name: title,
     partNumber,
-    manufacturerPart: it.vendorPart || '',
+    manufacturerPart: '',
     manufacturer: it.category || '',
     folder: it.category || 'Stock',
     onHand,
     reserved: Math.max(0, onHand - available),
     available,
-    status: stockStatus(available),
+    // Trust the feed's status when present; otherwise derive from availability.
+    status: it.status || stockStatus(available),
     bin: '',
     location: 'Nexus / Sortly',
     invSource: 'nexus',
   };
 }
 
-// Map a Nexus/Sortly row onto PartFinder's cost shape (Pricing Engine lane).
+// Map a Nexus inventory-feed row onto PartFinder's cost shape (Pricing Engine
+// lane). Cost provenance comes from `ourCost`, falling back to `price`.
 function nexusToCostItem(it) {
-  const partNumber = it.name || it.sku || '';
-  const title = it.volusionName || nexusDescription(it.details) || partNumber;
+  const partNumber = it.sku || it.name || '';
+  const title = it.name || partNumber;
   return {
-    qboItemId: 'nexus-' + (it.id ?? it.sku ?? partNumber),
+    qboItemId: 'nexus-' + (it.sku ?? partNumber),
     name: title,
     partNumber,
-    manufacturerPart: it.vendorPart || '',
+    manufacturerPart: '',
     manufacturer: it.category || '',
     unitCost: Number(it.ourCost ?? it.price) || 0,
     costSource: 'nexus',
@@ -2279,7 +2265,7 @@ function nexusToCostItem(it) {
 
 // ── Inventory (Sortly) ───────────────────────────────────────────────────────
 // Availability lane: "do we already have this part on the shelf?".
-// Live path (preferred): query Nexus's /api/sortly/items for real on-hand stock.
+// Live path (preferred): query Nexus's /api/inventory/feed for real on-hand stock.
 // Fallback path: a MOCK stock file, used whenever the Nexus bridge is off or a
 // live call fails, so the lane always demos. Both map onto the same item shape,
 // so the route and frontend never need to change.

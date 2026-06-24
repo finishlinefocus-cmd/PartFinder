@@ -1,6 +1,6 @@
 {
   "sources": [
-    { "id": "nexus", "name": "Nexus Live Inventory (Sortly)", "type": "warehouse", "enabled": true, "notes": "Read-only live on-hand + our-cost from the Nexus Support app /api/sortly/items. Requires NEXUS_SESSION_COOKIE; falls back to mock data when off." },
+    { "id": "nexus", "name": "Nexus Live Inventory (Sortly)", "type": "warehouse", "enabled": true, "notes": "Read-only live on-hand + our-cost from the Nexus Support app /api/inventory/feed. Requires NEXUS_INVENTORY_TOKEN (matches Nexus NEXUS_INGEST_TOKEN), sent as Authorization: Bearer; falls back to mock data when off." },
     { "id": "bigquery", "name": "BigQuery Inventory", "type": "warehouse", "enabled": false },
     { "id": "serpapi", "name": "Google Shopping", "type": "api", "enabled": true },
     { "id": "apify", "name": "Apify Scrapers", "type": "scrape", "enabled": false },
