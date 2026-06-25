@@ -2,7 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import fetch from 'node-fetch';
-import { existsSync, readFileSync, writeFileSync } from 'fs';
+import { existsSync, readFileSync, writeFileSync, renameSync } from 'fs';
 
 dotenv.config();
 
@@ -830,9 +830,17 @@ function readCatalogStore() {
   }
 }
 
+// Atomic write: write a temp file then rename over the target, so a crash/kill mid-write can't leave
+// a half-written (corrupt) file — important for the multi-MB distributorCatalog.json.
+function atomicWrite(file, content) {
+  const tmp = `${file}.${process.pid}.tmp`;
+  writeFileSync(tmp, content);
+  renameSync(tmp, file);
+}
+
 function writeCatalogStore(items) {
   const store = { updatedAt: new Date().toISOString(), items };
-  writeFileSync(CATALOG_FILE, JSON.stringify(store, null, 2));
+  atomicWrite(CATALOG_FILE, JSON.stringify(store, null, 2));
   return store;
 }
 
@@ -851,7 +859,7 @@ function readImportProfiles() {
 function writeImportProfile(distributorId, profile) {
   const all = readImportProfiles();
   all[distributorId] = { ...profile, updatedAt: new Date().toISOString() };
-  writeFileSync(IMPORT_PROFILES_FILE, JSON.stringify(all, null, 2));
+  atomicWrite(IMPORT_PROFILES_FILE, JSON.stringify(all, null, 2));
   return all[distributorId];
 }
 
@@ -871,7 +879,7 @@ function appendChangeLog(distributorId, event) {
   const list = Array.isArray(all[distributorId]) ? all[distributorId] : [];
   list.unshift(event);
   all[distributorId] = list.slice(0, 50);
-  writeFileSync(CHANGE_LOG_FILE, JSON.stringify(all, null, 2));
+  atomicWrite(CHANGE_LOG_FILE, JSON.stringify(all, null, 2));
   return all[distributorId];
 }
 
@@ -1758,7 +1766,12 @@ app.post('/api/distributors/:id/import', (req, res) => {
   // "unavailable" flags. Only when coverage is high do absences mean discontinued.
   // coverage = how many parts we already had did this file re-list (updated / prior).
   const coverage = priorCount > 0 ? updated / priorCount : 1;
-  const partialUpload = priorCount >= 20 && coverage < 0.5;
+  // Conservative mass-discontinue guard: a vendor often sends ONE category at a time, and a column
+  // misparse can match almost nothing — so if this file re-lists too little of what we already had,
+  // treat absent parts as "not in this upload" rather than flagging them discontinued. Bail when
+  // <60% is re-listed (would flag >40% gone), and protect smaller catalogs too (>=12 prior parts).
+  // Discontinue stays non-destructive (a flag) and is reversed by the next good import.
+  const partialUpload = priorCount >= 12 && coverage < 0.6;
   const discontinued = [];      // newly flagged unavailable this import
   const stillMissing = [];      // already-flagged, still absent
   if (!partialUpload) {
@@ -1872,7 +1885,7 @@ app.delete('/api/distributors/:id/import-profile', (req, res) => {
   if (!distributor) return res.status(404).json({ error: 'Unknown distributor' });
   const all = readImportProfiles();
   delete all[distributor.id];
-  writeFileSync(IMPORT_PROFILES_FILE, JSON.stringify(all, null, 2));
+  atomicWrite(IMPORT_PROFILES_FILE, JSON.stringify(all, null, 2));
   res.json({ ok: true });
 });
 
@@ -2479,6 +2492,27 @@ app.get('/api/cost', async (req, res) => {
   }
 });
 
+// Google Shopping via SerpApi — returns [] when no key is configured (graceful no-op).
+async function searchSerpApi(q, condition) {
+  if (!process.env.SERPAPI_KEY) return [];
+  const params = new URLSearchParams({ engine: 'google_shopping', q, api_key: process.env.SERPAPI_KEY, num: 20 });
+  if (condition && condition !== 'Any') params.append('tbs', condition === 'Used' ? 'mr:1,avg_rating:100,condition:1' : '');
+  const serpRes = await fetch(`https://serpapi.com/search.json?${params}`);
+  const serpData = await serpRes.json();
+  if (!serpData.shopping_results) return [];
+  return serpData.shopping_results.map(item => ({
+    id: item.position,
+    title: item.title,
+    source: item.source || 'Google Shopping',
+    price: parseFloat(item.price?.replace(/[^0-9.]/g, '')) || 0,
+    shipping: parseFloat(item.shipping?.replace(/[^0-9.]/g, '')) || 0,
+    condition: item.second_hand_condition ? 'used' : 'new',
+    link: item.link || item.product_link || '#',
+    thumbnail: item.thumbnail || null,
+    via: 'serpapi',
+  }));
+}
+
 app.get('/api/search', async (req, res) => {
   const { q, condition } = req.query;
 
@@ -2506,52 +2540,21 @@ app.get('/api/search', async (req, res) => {
     console.error('Catalog search error:', err.message);
   }
 
-  try {
-    const bigQueryResults = await searchBigQueryParts(q, condition);
-    results.push(...bigQueryResults);
-  } catch (err) {
-    console.error('BigQuery search error:', err.message);
-  }
-
-  try {
-    const apifyResults = await searchApify(q);
-    results.push(...apifyResults);
-  } catch (err) {
-    console.error('Apify search error:', err.message);
-  }
-
-  try {
-    const params = new URLSearchParams({
-      engine: 'google_shopping',
-      q: q,
-      api_key: process.env.SERPAPI_KEY,
-      num: 20,
-    });
-
-    if (condition && condition !== 'Any') {
-      params.append('tbs', condition === 'Used' ? 'mr:1,avg_rating:100,condition:1' : '');
-    }
-
-    const serpRes = await fetch(`https://serpapi.com/search.json?${params}`);
-    const serpData = await serpRes.json();
-
-    if (serpData.shopping_results) {
-      serpData.shopping_results.forEach(item => {
-        results.push({
-          id: item.position,
-          title: item.title,
-          source: item.source || 'Google Shopping',
-          price: parseFloat(item.price?.replace(/[^0-9.]/g, '')) || 0,
-          shipping: parseFloat(item.shipping?.replace(/[^0-9.]/g, '')) || 0,
-          condition: item.second_hand_condition ? 'used' : 'new',
-          link: item.link || item.product_link || '#',
-          thumbnail: item.thumbnail || null,
-          via: 'serpapi'
-        });
-      });
-    }
-  } catch (err) {
-    console.error('SerpApi error:', err.message);
+  // External sources run IN PARALLEL with a per-source timeout, so one slow/hung API can't stall the
+  // whole search. This was the ~15s latency: BigQuery + Apify + SerpApi were awaited sequentially.
+  const SEARCH_SOURCE_TIMEOUT_MS = Number(process.env.SEARCH_SOURCE_TIMEOUT_MS) || 6000;
+  const withTimeout = (p, ms, label) => Promise.race([
+    Promise.resolve(p),
+    new Promise((_, reject) => setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms)),
+  ]);
+  const external = await Promise.allSettled([
+    withTimeout(searchBigQueryParts(q, condition), SEARCH_SOURCE_TIMEOUT_MS, 'BigQuery'),
+    withTimeout(searchApify(q), SEARCH_SOURCE_TIMEOUT_MS, 'Apify'),
+    withTimeout(searchSerpApi(q, condition), SEARCH_SOURCE_TIMEOUT_MS, 'SerpApi'),
+  ]);
+  for (const r of external) {
+    if (r.status === 'fulfilled' && Array.isArray(r.value)) results.push(...r.value);
+    else if (r.status === 'rejected') console.error('Search source error:', r.reason?.message || r.reason);
   }
 
   results.sort((a, b) => a.price - b.price);
