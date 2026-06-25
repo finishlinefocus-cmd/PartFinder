@@ -838,9 +838,27 @@ function atomicWrite(file, content) {
   renameSync(tmp, file);
 }
 
+// Search-result cache: repeated identical lookups (people re-search the same part constantly) return
+// instantly and skip the slow + PAID external sources (SerpApi / Apify). Short TTL, bounded size, and
+// cleared whenever the catalog is rewritten (writeCatalogStore below) so results never go stale.
+const SEARCH_CACHE_TTL_MS = Number(process.env.SEARCH_CACHE_TTL_MS) || 10 * 60 * 1000;
+const SEARCH_CACHE_MAX = 500;
+const _searchCache = new Map(); // key -> { at, payload }
+function searchCacheGet(key) {
+  const e = _searchCache.get(key);
+  if (!e) return null;
+  if (Date.now() - e.at > SEARCH_CACHE_TTL_MS) { _searchCache.delete(key); return null; }
+  return e.payload;
+}
+function searchCacheSet(key, payload) {
+  _searchCache.set(key, { at: Date.now(), payload });
+  if (_searchCache.size > SEARCH_CACHE_MAX) _searchCache.delete(_searchCache.keys().next().value);
+}
+
 function writeCatalogStore(items) {
   const store = { updatedAt: new Date().toISOString(), items };
   atomicWrite(CATALOG_FILE, JSON.stringify(store, null, 2));
+  _searchCache.clear(); // catalog changed → any cached search results may now be stale
   return store;
 }
 
@@ -2520,6 +2538,10 @@ app.get('/api/search', async (req, res) => {
     return res.status(400).json({ error: 'Missing search query' });
   }
 
+  const cacheKey = `${String(q).trim().toLowerCase()}|${condition || ''}`;
+  const cachedPayload = searchCacheGet(cacheKey);
+  if (cachedPayload) return res.json({ ...cachedPayload, cached: true });
+
   const results = [];
 
   try {
@@ -2558,7 +2580,11 @@ app.get('/api/search', async (req, res) => {
   }
 
   results.sort((a, b) => a.price - b.price);
-  res.json({ results, count: results.length, query: q });
+  const payload = { results, count: results.length, query: q };
+  // Only cache a "good" (non-empty) response — never cache an empty result that happened because the
+  // external sources timed out/errored, or we'd serve that emptiness for the whole TTL.
+  if (results.length) searchCacheSet(cacheKey, payload);
+  res.json(payload);
 });
 
 const partfinderServer = app.listen(PORT, '0.0.0.0', () => {
