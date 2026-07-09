@@ -720,19 +720,10 @@ export default function App() {
 
       <div style={styles.topBar}>
         <div style={styles.tabs}>
-          <button style={{ ...styles.tab, ...(activeTab === 'home' ? styles.tabActive : {}) }} onClick={() => setActiveTab('home')}>Home</button>
-          <button style={{ ...styles.tab, ...(activeTab === 'search' ? styles.tabActive : {}) }} onClick={() => setActiveTab('search')}>Price Search</button>
-          <button style={{ ...styles.tab, ...(activeTab === 'availability' ? styles.tabActive : {}) }} onClick={() => setActiveTab('availability')}>Availability</button>
-          <button style={{ ...styles.tab, ...(activeTab === 'pricing' ? styles.tabActive : {}) }} onClick={() => setActiveTab('pricing')}>Pricing Engine</button>
+          {/* One search covers Price Search / Availability / Pricing / Alerts
+              (Sterling 2026-07-09) — only the Price Lists maintenance lane remains. */}
+          <button style={{ ...styles.tab, ...(activeTab === 'home' ? styles.tabActive : {}) }} onClick={() => setActiveTab('home')}>Search</button>
           <button style={{ ...styles.tab, ...(activeTab === 'distributors' ? styles.tabActive : {}) }} onClick={() => setActiveTab('distributors')}>Price Lists</button>
-          <button style={{ ...styles.tab, ...(activeTab === 'changes' ? styles.tabActive : {}) }} onClick={() => setActiveTab('changes')}>
-            Changes &amp; Alerts
-            {availability && availability.unavailable && availability.unavailable.length > 0 && (
-              <span style={{ marginLeft: 6, fontSize: 11, fontWeight: 700, padding: '1px 7px', borderRadius: 999, background: '#FCEBEB', color: '#A32D2D' }}>
-                {availability.unavailable.length}
-              </span>
-            )}
-          </button>
         </div>
         {/* "Viewing as" removed (Sterling 2026-07-09) — it only drove the retired
             Home tile dashboard; the one-search landing is the same for everyone. */}
