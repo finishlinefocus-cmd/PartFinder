@@ -70,13 +70,40 @@ export default function App() {
     if (!q) return;
     setULoading(true); setUErr(''); setUSearched(true);
     const grab = (url) => fetch(url).then(r => r.json()).catch(() => null);
-    const [web, inv, cost] = await Promise.all([
-      grab('/api/search?q=' + encodeURIComponent(q) + '&condition=Any'),
-      grab('/api/inventory?q=' + encodeURIComponent(q)),
-      grab('/api/cost?q=' + encodeURIComponent(q)),
+    // The search APIs AND-match every word, so a natural title like
+    // "REBUILT Nabco Magnum IV Control (Nabco)" returns nothing. Relax the query in
+    // steps — strip parentheticals, then condition words — and merge every round's
+    // hits until there's a decent result set.
+    const CONDITION_WORDS = /\b(REBUILT|RBLT|NEW|USED|OEM|EXCH|EXCHANGE|RECON|REFURB(ISHED)?)\b/gi;
+    const variants = [];
+    const push = (v) => { const t = v.replace(/\s+/g, ' ').trim(); if (t && !variants.includes(t)) variants.push(t); };
+    push(q);
+    push(q.replace(/\([^)]*\)/g, ' '));
+    push(q.replace(/\([^)]*\)/g, ' ').replace(CONDITION_WORDS, ' '));
+    const toks = q.replace(/\([^)]*\)/g, ' ').replace(CONDITION_WORDS, ' ').replace(/[^A-Za-z0-9 ]/g, ' ').split(/\s+/).filter(Boolean);
+    if (toks.length > 3) push(toks.slice(0, 3).join(' '));
+    if (toks.length > 2) push(toks.slice(0, 2).join(' '));
+
+    const seenIds = new Set();
+    let webAll = [];
+    for (const v of variants) {
+      const w = await grab('/api/search?q=' + encodeURIComponent(v) + '&condition=Any');
+      for (const r of (w && w.results) || []) {
+        const k = r.id || `${r.source}|${r.title}|${r.price}`;
+        if (seenIds.has(k)) continue;
+        seenIds.add(k);
+        webAll.push(r);
+      }
+      if (webAll.length >= 8) break; // enough — stop relaxing
+    }
+    // Shelf + cost run on the cleaned query (their matchers are strict too).
+    const invQ = variants[Math.min(2, variants.length - 1)];
+    const [inv, cost] = await Promise.all([
+      grab('/api/inventory?q=' + encodeURIComponent(invQ)),
+      grab('/api/cost?q=' + encodeURIComponent(invQ)),
     ]);
-    if (!web && !inv && !cost) setUErr('Search failed — is the PartFinder API up?');
-    setUWeb((web && web.results) || []);
+    if (!webAll.length && !inv && !cost) setUErr('Search failed — is the PartFinder API up?');
+    setUWeb(webAll);
     setUInv((inv && inv.items) || []);
     setUCost((cost && cost.items) || []);
     setULoading(false);
@@ -746,16 +773,12 @@ export default function App() {
               if (String(r.source || '').startsWith('Apify')) return 'Google Shopping';
               return r.source || 'Web';
             };
-            // Relevance: a result must carry the query's tokens in its title (kills the
-            // "Stanley Collins card trick" class of Google noise).
+            // Relevance filtering REVERTED (Sterling 2026-07-09: long queries lost results —
+            // 'REBUILT Nabco Magnum IV Control' went from many hits to one). Tokens are
+            // still used to pick the hero, but nothing is dropped.
             const normT = (v) => String(v || '').toUpperCase().replace(/[^A-Z0-9 ]/g, ' ');
             const qTokens = normT(uQ).split(/\s+/).filter(t => t.length >= 2);
-            const relevant = (r) => {
-              if (!qTokens.length) return true;
-              const hayA = normT(r.title).replace(/ /g, '');
-              const hit = qTokens.filter(t => normT(r.title).includes(t) || hayA.includes(t.replace(/ /g, ''))).length;
-              return hit >= Math.max(1, Math.ceil(qTokens.length * 0.6));
-            };
+            const relevant = () => true;
             // Dedupe: the same listing often arrives once per category export.
             const seen = new Set();
             const web = uWeb.filter(relevant).filter(r => {
