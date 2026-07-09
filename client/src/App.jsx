@@ -69,12 +69,17 @@ export default function App() {
   const [supplierView, setSupplierView] = useState(null); // { name, url } | null
   const [uWebLoading, setUWebLoading] = useState(false); // web prices still streaming in
   const [showAllOffers, setShowAllOffers] = useState(false);
+  // The four classic criteria (Sterling 2026-07-09: "put back the four search
+  // criterias") — description (the big bar), part #, manufacturer, condition.
+  const [uPart, setUPart] = useState('');
+  const [uMfg, setUMfg] = useState('');
+  const [uCond, setUCond] = useState('Any');
   const [recent, setRecent] = useState(() => { try { return JSON.parse(localStorage.getItem('pf_recent') || '[]'); } catch { return []; } });
   const uRunId = React.useRef(0); // cancels stale streams when a new search starts
   useEffect(() => { loadDistributors().catch(() => {}); }, []);
   async function runUnified(e) {
     if (e) e.preventDefault();
-    const q = uQ.trim();
+    const q = [uMfg, uQ, uPart].map(v => v.trim()).filter(Boolean).join(' ');
     if (!q) return;
     const runId = ++uRunId.current;
     setULoading(true); setUWebLoading(true); setUErr(''); setUSearched(true);
@@ -153,13 +158,13 @@ export default function App() {
     // ── PHASE 2 (background): live web prices stream in as each variant lands ──
     try {
       await Promise.all(variants.slice(0, 3).map(v =>
-        grab('/api/search?q=' + encodeURIComponent(v) + '&condition=Any').then(w => {
+        grab('/api/search?q=' + encodeURIComponent(v) + '&condition=' + encodeURIComponent(uCond)).then(w => {
           if (runId === uRunId.current) mergeRows((w && w.results) || []);
         })));
       for (const v of variants.slice(3)) {
         if (runId !== uRunId.current) return;
         if (acc.filter(r => Number(r.price) > 0).length >= 6) break;
-        const w = await grab('/api/search?q=' + encodeURIComponent(v) + '&condition=Any');
+        const w = await grab('/api/search?q=' + encodeURIComponent(v) + '&condition=' + encodeURIComponent(uCond));
         if (runId === uRunId.current) mergeRows((w && w.results) || []);
       }
     } finally {
@@ -789,7 +794,7 @@ export default function App() {
               value={uQ}
               onChange={e => setUQ(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); runUnified(); } }}
-              placeholder="Search a part — number, name, or description…"
+              placeholder="Description — or anything: part number, name, plain English…"
               style={{ flex: 1, padding: '13px 18px', fontSize: 16, border: '2px solid #dcdcdc', borderRadius: 999, outline: 'none' }}
             />
             <button type="submit" disabled={uLoading || !uQ.trim()}
@@ -797,6 +802,22 @@ export default function App() {
               {uLoading ? 'Searching…' : 'Search'}
             </button>
           </form>
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap', margin: '-8px auto 16px', maxWidth: 720 }}>
+            <input value={uPart} onChange={e => setUPart(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); runUnified(); } }}
+              placeholder="Part #"
+              style={{ flex: 1, minWidth: 140, padding: '9px 14px', fontSize: 13, border: '1.5px solid #dcdcdc', borderRadius: 10, outline: 'none' }} />
+            <input value={uMfg} onChange={e => setUMfg(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); runUnified(); } }}
+              placeholder="Manufacturer"
+              style={{ flex: 1, minWidth: 140, padding: '9px 14px', fontSize: 13, border: '1.5px solid #dcdcdc', borderRadius: 10, outline: 'none' }} />
+            <select value={uCond} onChange={e => setUCond(e.target.value)}
+              style={{ padding: '9px 12px', fontSize: 13, border: '1.5px solid #dcdcdc', borderRadius: 10, background: '#fff' }}>
+              <option>Any</option>
+              <option>New</option>
+              <option>Used</option>
+            </select>
+          </div>
           {recent.length > 0 && (
             <div style={{ display: 'flex', gap: 6, justifyContent: 'center', flexWrap: 'wrap', margin: '-10px 0 14px' }}>
               {recent.map(rq => (
