@@ -64,6 +64,7 @@ export default function App() {
   const [uInv, setUInv] = useState([]);
   const [uCost, setUCost] = useState([]);
   const [uErr, setUErr] = useState('');
+  useEffect(() => { loadDistributors().catch(() => {}); }, []);
   async function runUnified(e) {
     if (e) e.preventDefault();
     const q = uQ.trim();
@@ -818,10 +819,18 @@ export default function App() {
             const marketHigh = priced.length ? priced[priced.length - 1].price : null;
             const suggested = costHit ? computePricing(costHit.unitCost, pcTargetMargin, marketLow).suggested : null;
             // Our own listing joins the buying options, ranked by OUR suggested retail.
-            const options = [...priced.map(r => ({ kind: sellerOf(r).startsWith('Automatics') ? 'ourweb' : 'web', seller: sellerOf(r), price: r.price, title: r.title, note: r.condition && r.condition !== 'unknown' ? r.condition : '', link: r.link, shipping: r.shipping }))];
+            const unpriced = web.filter(r => !(Number(r.price) > 0) && r !== hero);
+            const options = [
+              ...priced.map(r => ({ kind: sellerOf(r).startsWith('Automatics') ? 'ourweb' : 'web', seller: sellerOf(r), price: r.price, title: r.title, note: r.condition && r.condition !== 'unknown' ? r.condition : '', link: r.link, shipping: r.shipping, thumb: r.thumbnail })),
+            ];
             if (costHit) {
               options.push({ kind: 'ours', seller: 'Automatics & More', price: suggested, note: invHit ? `${invHit.available} on hand · ${invHit.location || 'our shelf'}` : 'our stock', link: null, cost: costHit.unitCost });
               options.sort((a, b) => (a.price ?? 1e12) - (b.price ?? 1e12));
+            }
+            // Unpriced listings continue DOWN the same list (was a separate "More
+            // options" grid — Sterling 2026-07-09: one list on the right).
+            for (const r of unpriced) {
+              options.push({ kind: 'web', seller: sellerOf(r), price: null, title: r.title, note: 'no price listed', link: r.link, thumb: r.thumbnail });
             }
             const thumbs = web.filter(r => r.thumbnail && r !== hero).slice(0, 4);
             const more = web.filter(r => r !== hero).slice(0, 8);
@@ -884,7 +893,9 @@ export default function App() {
                       {options.length === 0 && <div style={{ fontSize: 13, color: '#9aa0a6' }}>No priced listings found.</div>}
                       {options.map((o, i) => {
                         const inner = (
-                          <div style={{ border: '1px solid ' + (o.kind === 'ours' ? '#0f766e' : '#e8eaed'), background: o.kind === 'ours' ? '#f0fdfa' : '#fff', borderRadius: 12, padding: '10px 12px' }}>
+                          <div style={{ display: 'flex', gap: 10, alignItems: 'center', border: '1px solid ' + (o.kind === 'ours' ? '#0f766e' : '#e8eaed'), background: o.kind === 'ours' ? '#f0fdfa' : '#fff', borderRadius: 12, padding: '10px 12px' }}>
+                            {o.thumb && <img src={o.thumb} alt="" style={{ width: 44, height: 44, objectFit: 'contain', background: '#fafafa', borderRadius: 8, flexShrink: 0 }} />}
+                            <div style={{ minWidth: 0, flex: 1 }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
                               <span style={{ fontWeight: 700, fontSize: 13, color: o.kind === 'ours' ? '#0f766e' : '#1a73e8' }}>
                                 {i === 0 && <span style={{ background: '#e6f4ea', color: '#137333', borderRadius: 6, padding: '1px 6px', fontSize: 10, fontWeight: 800, marginRight: 6 }}>Best price</span>}
@@ -900,6 +911,7 @@ export default function App() {
                             <div style={{ fontSize: 11.5, color: '#70757a', marginTop: 2 }}>
                               {o.kind === 'ours' ? `cost $${Number(o.cost).toFixed(2)} · ${o.note}` : [o.note, o.shipping > 0 ? `+$${o.shipping} shipping` : 'shipping varies'].filter(Boolean).join(' · ')}
                             </div>
+                            </div>
                           </div>
                         );
                         return o.link
@@ -910,26 +922,23 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* MORE OPTIONS — variant cards */}
-                {more.length > 0 && (
-                  <div style={{ marginTop: 20 }}>
-                    <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 10 }}>More options</div>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))', gap: 12 }}>
-                      {more.map((r, i) => (
-                        <a key={i} href={r.link} target="_blank" rel="noreferrer" style={{ textDecoration: 'none', color: 'inherit' }}>
-                          <div style={{ border: '1px solid #e8eaed', borderRadius: 12, padding: 10, height: '100%' }}>
-                            {r.thumbnail
-                              ? <img src={r.thumbnail} alt="" style={{ width: '100%', height: 110, objectFit: 'contain', background: '#fafafa', borderRadius: 8 }} />
-                              : <div style={{ width: '100%', height: 110, background: '#fafafa', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26 }}>📦</div>}
-                            <div style={{ fontSize: 12.5, fontWeight: 600, marginTop: 6, lineHeight: 1.3, maxHeight: 34, overflow: 'hidden' }}>{r.title}</div>
-                            {Number(r.price) > 0 && <div style={{ fontSize: 13, fontWeight: 800, color: '#137333', marginTop: 3 }}>${Number(r.price).toFixed(2)}</div>}
-                            <div style={{ fontSize: 11, color: '#70757a', marginTop: 2 }}>{sellerOf(r)}</div>
-                          </div>
-                        </a>
-                      ))}
-                    </div>
+                {/* OUR REGULAR SUPPLIERS — quick jumps for when the rail doesn't settle it,
+                    plus Shortly (Nexus inventory) with the query carried over. */}
+                <div style={{ marginTop: 20 }}>
+                  <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 10 }}>Our regular suppliers</div>
+                  <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                    <a href={(document.referrer ? new URL(document.referrer).origin : 'http://localhost:4800') + '/?open=tools%3Ashortly'} target="_blank" rel="noreferrer"
+                      style={{ textDecoration: 'none', border: '1px solid #0f766e', background: '#f0fdfa', color: '#0f766e', borderRadius: 12, padding: '10px 14px', fontSize: 13, fontWeight: 700 }}>
+                      🔎 Search Shortly (our inventory)
+                    </a>
+                    {distributors.filter(d => d.enabled && d.website).slice(0, 8).map(d => (
+                      <a key={d.id} href={d.website} target="_blank" rel="noreferrer"
+                        style={{ textDecoration: 'none', border: '1px solid #e8eaed', background: '#fff', color: '#1a73e8', borderRadius: 12, padding: '10px 14px', fontSize: 13, fontWeight: 700 }}>
+                        {d.name}
+                      </a>
+                    ))}
                   </div>
-                )}
+                </div>
               </div>
             );
           })()}
