@@ -819,13 +819,17 @@ export default function App() {
             </select>
           </div>
           {recent.length > 0 && (
-            <div style={{ display: 'flex', gap: 6, justifyContent: 'center', flexWrap: 'wrap', margin: '-10px 0 14px' }}>
-              {recent.map(rq => (
-                <button key={rq} type="button" onClick={() => { setUQ(rq); setTimeout(runUnified, 0); }}
-                  style={{ cursor: 'pointer', border: '1px solid #e8eaed', background: '#fff', color: '#5f6368', borderRadius: 999, padding: '4px 12px', fontSize: 12 }}>
+            <div style={{ display: 'flex', gap: 6, justifyContent: 'center', alignItems: 'center', flexWrap: 'wrap', margin: '-10px 0 14px' }}>
+              <span style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#bdc1c6' }}>Recent</span>
+              {recent.slice(0, 4).map(rq => (
+                <button key={rq} type="button" title={rq} onClick={() => { setUQ(rq); setTimeout(runUnified, 0); }}
+                  style={{ cursor: 'pointer', border: '1px solid #eef0f2', background: '#f8f9fa', color: '#80868b', borderRadius: 999, padding: '2px 10px', fontSize: 11, maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {rq}
                 </button>
               ))}
+              <button type="button" title="Clear recent searches"
+                onClick={() => { setRecent([]); try { localStorage.removeItem('pf_recent'); } catch { /* private mode */ } }}
+                style={{ cursor: 'pointer', border: 'none', background: 'none', color: '#bdc1c6', fontSize: 12, padding: 2 }}>✕</button>
             </div>
           )}
           {uErr && <div style={{ color: '#b91c1c', fontSize: 13, textAlign: 'center' }}>{uErr}</div>}
