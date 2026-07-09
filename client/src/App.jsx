@@ -718,6 +718,7 @@ export default function App() {
             <input
               value={uQ}
               onChange={e => setUQ(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); runUnified(); } }}
               placeholder="Search a part — number, name, or description…"
               style={{ flex: 1, padding: '13px 18px', fontSize: 16, border: '2px solid #dcdcdc', borderRadius: 999, outline: 'none' }}
             />
