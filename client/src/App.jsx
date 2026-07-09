@@ -67,17 +67,25 @@ export default function App() {
   // Embedded supplier browser (Sterling 2026-07-09): vendor sites open INSIDE the
   // page under the results — the buying-options rail stays visible on the right.
   const [supplierView, setSupplierView] = useState(null); // { name, url } | null
+  const [uWebLoading, setUWebLoading] = useState(false); // web prices still streaming in
+  const [recent, setRecent] = useState(() => { try { return JSON.parse(localStorage.getItem('pf_recent') || '[]'); } catch { return []; } });
+  const uRunId = React.useRef(0); // cancels stale streams when a new search starts
   useEffect(() => { loadDistributors().catch(() => {}); }, []);
   async function runUnified(e) {
     if (e) e.preventDefault();
     const q = uQ.trim();
     if (!q) return;
-    setULoading(true); setUErr(''); setUSearched(true);
+    const runId = ++uRunId.current;
+    setULoading(true); setUWebLoading(true); setUErr(''); setUSearched(true);
+    setUWeb([]); setUInv([]); setUCost([]);
+    setSupplierView(null);
+    // remember recent searches (last 6)
+    setRecent(prev => {
+      const next = [q, ...prev.filter(x => x !== q)].slice(0, 6);
+      try { localStorage.setItem('pf_recent', JSON.stringify(next)); } catch { /* private mode */ }
+      return next;
+    });
     const grab = (url) => fetch(url).then(r => r.json()).catch(() => null);
-    // The search APIs AND-match every word, so a natural title like
-    // "REBUILT Nabco Magnum IV Control (Nabco)" returns nothing. Relax the query in
-    // steps — strip parentheticals, then condition words — and merge every round's
-    // hits until there's a decent result set.
     const CONDITION_WORDS = /\b(REBUILT|RBLT|NEW|USED|OEM|EXCH|EXCHANGE|RECON|REFURB(ISHED)?)\b/gi;
     const variants = [];
     const push = (v) => { const t = v.replace(/\s+/g, ' ').trim(); if (t && !variants.includes(t)) variants.push(t); };
@@ -87,59 +95,68 @@ export default function App() {
     const toks = q.replace(/\([^)]*\)/g, ' ').replace(CONDITION_WORDS, ' ').replace(/[^A-Za-z0-9 ]/g, ' ').split(/\s+/).filter(Boolean);
     if (toks.length > 3) push(toks.slice(0, 3).join(' '));
     if (toks.length > 2) push(toks.slice(0, 2).join(' '));
+    const cleaned = variants[Math.min(2, variants.length - 1)];
 
-    const seenIds = new Set();
-    let webAll = [];
-    const merge = (w) => {
-      for (const r of (w && w.results) || []) {
-        const k = r.id || `${r.source}|${r.title}|${r.price}`;
-        if (seenIds.has(k)) continue;
-        seenIds.add(k);
-        webAll.push(r);
+    // stable dedupe key across phases/endpoints
+    const keyOf = (r) => `${(r.source || '').toUpperCase()}|${String(r.title || '').toUpperCase().replace(/[^A-Z0-9]/g, '')}|${Number(r.price) || 0}`;
+    const seen = new Set();
+    let acc = [];
+    const mergeRows = (rows) => {
+      let added = false;
+      for (const r of rows) {
+        const k = keyOf(r);
+        if (seen.has(k)) continue;
+        seen.add(k);
+        acc.push(r);
+        added = true;
       }
+      if (added && runId === uRunId.current) setUWeb([...acc]);
     };
-    // First three variants ALWAYS run (in parallel) — stopping early let the local
-    // catalogs fill the quota before the live web search ever contributed
-    // (Sterling: "it only searches Nexus now").
-    const first = variants.slice(0, 3);
-    // Nexus semantic search (vector, Ollama) rides along with the first round —
-    // plain-English queries hit even when exact words don't match.
-    const semP = grab('/nexus-semantic?q=' + encodeURIComponent(variants[Math.min(2, variants.length - 1)]));
-    (await Promise.all(first.map(v => grab('/api/search?q=' + encodeURIComponent(v) + '&condition=Any')))).forEach(merge);
-    const sem = await semP;
+
+    // ── PHASE 1 (instant): our catalogs, shelf, cost, semantic — renders immediately ──
+    const [cat, inv, cost, sem] = await Promise.all([
+      grab('/api/distributor-catalog?q=' + encodeURIComponent(cleaned)),
+      grab('/api/inventory?q=' + encodeURIComponent(cleaned)),
+      grab('/api/cost?q=' + encodeURIComponent(cleaned)),
+      grab('/nexus-semantic?q=' + encodeURIComponent(cleaned)),
+    ]);
+    if (runId !== uRunId.current) return; // superseded by a newer search
+    mergeRows(((cat && cat.items) || []).map(c => ({
+      id: c.id, title: c.description, source: c.distributor,
+      price: Number(c.price) || 0, shipping: 0, condition: 'unknown',
+      link: c.distributorId === 'addison' ? 'https://www.addisonautomatics.com/catalog/' : null,
+      thumbnail: c.thumbnail || null, via: 'catalog',
+    })));
     for (const r of (sem && sem.results) || []) {
       const title = r.name || r.description || '';
-      const k = `sem|${r.vendor}|${r.sku || r.mfgPart}|${title}`;
-      if (seenIds.has(k) || !title) continue;
-      seenIds.add(k);
-      webAll.push({
-        id: k,
-        title,
+      if (!title) continue;
+      mergeRows([{
+        id: `sem|${r.vendor}|${r.sku || r.mfgPart}`, title,
         source: r.vendor === 'shortly' ? 'Our shelf' : (r.vendor === 'addison' ? 'Addison Automatics' : r.vendor === 'doorcontrols' ? 'Door Controls' : (r.brand || 'Catalog')),
-        price: Number(r.price ?? r.list ?? r.net) || 0,
-        shipping: 0,
-        condition: 'unknown',
-        link: r.url || null,
-        thumbnail: (r.image && /^https?:/.test(r.image)) ? r.image : null,
-        via: 'semantic',
-        score: r.score,
-      });
+        price: Number(r.price ?? r.list ?? r.net) || 0, shipping: 0, condition: 'unknown',
+        link: r.url || null, thumbnail: (r.image && /^https?:/.test(r.image)) ? r.image : null,
+        via: 'semantic', score: r.score,
+      }]);
     }
-    for (const v of variants.slice(3)) {
-      if (webAll.length >= 6) break;
-      merge(await grab('/api/search?q=' + encodeURIComponent(v) + '&condition=Any'));
-    }
-    // Shelf + cost run on the cleaned query (their matchers are strict too).
-    const invQ = variants[Math.min(2, variants.length - 1)];
-    const [inv, cost] = await Promise.all([
-      grab('/api/inventory?q=' + encodeURIComponent(invQ)),
-      grab('/api/cost?q=' + encodeURIComponent(invQ)),
-    ]);
-    if (!webAll.length && !inv && !cost) setUErr('Search failed — is the PartFinder API up?');
-    setUWeb(webAll);
     setUInv((inv && inv.items) || []);
     setUCost((cost && cost.items) || []);
-    setULoading(false);
+    setULoading(false); // page renders NOW — web prices keep streaming below
+
+    // ── PHASE 2 (background): live web prices stream in as each variant lands ──
+    try {
+      await Promise.all(variants.slice(0, 3).map(v =>
+        grab('/api/search?q=' + encodeURIComponent(v) + '&condition=Any').then(w => {
+          if (runId === uRunId.current) mergeRows((w && w.results) || []);
+        })));
+      for (const v of variants.slice(3)) {
+        if (runId !== uRunId.current) return;
+        if (acc.filter(r => Number(r.price) > 0).length >= 6) break;
+        const w = await grab('/api/search?q=' + encodeURIComponent(v) + '&condition=Any');
+        if (runId === uRunId.current) mergeRows((w && w.results) || []);
+      }
+    } finally {
+      if (runId === uRunId.current) setUWebLoading(false);
+    }
   }
   const [query, setQuery] = useState('');
   const [partNumber, setPartNumber] = useState('');
@@ -772,6 +789,16 @@ export default function App() {
               {uLoading ? 'Searching…' : 'Search'}
             </button>
           </form>
+          {recent.length > 0 && (
+            <div style={{ display: 'flex', gap: 6, justifyContent: 'center', flexWrap: 'wrap', margin: '-10px 0 14px' }}>
+              {recent.map(rq => (
+                <button key={rq} type="button" onClick={() => { setUQ(rq); setTimeout(runUnified, 0); }}
+                  style={{ cursor: 'pointer', border: '1px solid #e8eaed', background: '#fff', color: '#5f6368', borderRadius: 999, padding: '4px 12px', fontSize: 12 }}>
+                  {rq}
+                </button>
+              ))}
+            </div>
+          )}
           {uErr && <div style={{ color: '#b91c1c', fontSize: 13, textAlign: 'center' }}>{uErr}</div>}
           {!uSearched && !uLoading && (
             <div style={{ textAlign: 'center', color: '#9aa0a6', fontSize: 13 }}>
@@ -917,7 +944,14 @@ export default function App() {
                         Typically <strong>${marketLow.toFixed(0)}{marketHigh > marketLow ? `–$${marketHigh.toFixed(0)}` : ''}</strong>
                       </div>
                     )}
-                    <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>Buying options</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                      <span style={{ fontSize: 15, fontWeight: 700 }}>Buying options</span>
+                      {uWebLoading && (
+                        <span style={{ fontSize: 11, fontWeight: 700, color: '#1a73e8', background: '#e8f0fe', borderRadius: 999, padding: '2px 10px' }}>
+                          searching the web…
+                        </span>
+                      )}
+                    </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                       {options.length === 0 && <div style={{ fontSize: 13, color: '#9aa0a6' }}>No priced listings found.</div>}
                       {options.map((o, i) => {
