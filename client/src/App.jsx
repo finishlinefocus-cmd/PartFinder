@@ -944,11 +944,17 @@ export default function App() {
                             </div>
                           </div>
                         );
-                        // Clicking a listing opens it in the IN-PAGE browser under the hero
-                        // (Sterling 2026-07-09) — the rail stays put; the panel's ↗ button
-                        // covers sites that refuse to be embedded.
+                        // Clicking a listing opens it in the IN-PAGE browser under the hero —
+                        // EXCEPT sites that block framing (Google/Amazon/eBay/Walmart send
+                        // X-Frame-Options), which would render a blank panel ("it sucks").
+                        // Those open a new tab directly.
+                        const FRAME_BLOCKERS = /google\.|amazon\.|ebay\.|walmart\.|homedepot\.|lowes\./i;
+                        const openListing = () => {
+                          if (FRAME_BLOCKERS.test(o.link)) window.open(o.link, '_blank', 'noopener');
+                          else setSupplierView({ name: o.seller, url: o.link });
+                        };
                         const card = o.link
-                          ? <div onClick={() => setSupplierView({ name: o.seller, url: o.link })} style={{ cursor: 'pointer' }}>{inner}</div>
+                          ? <div onClick={openListing} style={{ cursor: 'pointer' }} title={FRAME_BLOCKERS.test(o.link) ? 'Opens in a new tab (site blocks embedding)' : 'Opens in the page below'}>{inner}</div>
                           : inner;
                         return (
                           <React.Fragment key={i}>
