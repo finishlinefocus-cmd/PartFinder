@@ -944,8 +944,11 @@ export default function App() {
                             </div>
                           </div>
                         );
+                        // Clicking a listing opens it in the IN-PAGE browser under the hero
+                        // (Sterling 2026-07-09) — the rail stays put; the panel's ↗ button
+                        // covers sites that refuse to be embedded.
                         const card = o.link
-                          ? <a href={o.link} target="_blank" rel="noreferrer" style={{ textDecoration: 'none', color: 'inherit' }}>{inner}</a>
+                          ? <div onClick={() => setSupplierView({ name: o.seller, url: o.link })} style={{ cursor: 'pointer' }}>{inner}</div>
                           : inner;
                         return (
                           <React.Fragment key={i}>
