@@ -86,15 +86,22 @@ export default function App() {
 
     const seenIds = new Set();
     let webAll = [];
-    for (const v of variants) {
-      const w = await grab('/api/search?q=' + encodeURIComponent(v) + '&condition=Any');
+    const merge = (w) => {
       for (const r of (w && w.results) || []) {
         const k = r.id || `${r.source}|${r.title}|${r.price}`;
         if (seenIds.has(k)) continue;
         seenIds.add(k);
         webAll.push(r);
       }
-      if (webAll.length >= 8) break; // enough — stop relaxing
+    };
+    // First three variants ALWAYS run (in parallel) — stopping early let the local
+    // catalogs fill the quota before the live web search ever contributed
+    // (Sterling: "it only searches Nexus now").
+    const first = variants.slice(0, 3);
+    (await Promise.all(first.map(v => grab('/api/search?q=' + encodeURIComponent(v) + '&condition=Any')))).forEach(merge);
+    for (const v of variants.slice(3)) {
+      if (webAll.length >= 6) break;
+      merge(await grab('/api/search?q=' + encodeURIComponent(v) + '&condition=Any'));
     }
     // Shelf + cost run on the cleaned query (their matchers are strict too).
     const invQ = variants[Math.min(2, variants.length - 1)];
@@ -727,14 +734,8 @@ export default function App() {
             )}
           </button>
         </div>
-        <div style={styles.roleSwitch}>
-          <span style={{ fontSize: 12, color: '#666' }}>Viewing as</span>
-          <select style={styles.roleSelect} value={role} onChange={e => setRole(e.target.value)}>
-            {Object.entries(ROLES).map(([key, r]) => (
-              <option key={key} value={key}>{r.label}</option>
-            ))}
-          </select>
-        </div>
+        {/* "Viewing as" removed (Sterling 2026-07-09) — it only drove the retired
+            Home tile dashboard; the one-search landing is the same for everyone. */}
       </div>
 
       {activeTab === 'home' && (
