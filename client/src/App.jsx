@@ -895,7 +895,16 @@ export default function App() {
               options.push({ kind: 'web', seller: sellerOf(r), price: null, title: r.title, note: 'no price listed', link: r.link, thumb: r.thumbnail });
             }
             for (const r of related.slice(0, 10)) {
-              options.push({ kind: 'related', seller: r.source, price: Number(r.price) > 0 ? r.price : null, title: r.title, note: 'related part — our catalogs', link: r.link, thumb: r.thumbnail });
+              const noPrice = !(Number(r.price) > 0);
+              const isAddison = /addison/i.test(r.source || '');
+              options.push({
+                kind: 'related', seller: r.source,
+                price: noPrice ? null : r.price, title: r.title,
+                note: noPrice && isAddison
+                  ? 'dealer price — log in on their site (or import their price sheet in Price Lists)'
+                  : 'related part — our catalogs',
+                link: r.link, thumb: r.thumbnail,
+              });
             }
             const thumbs = web.filter(r => r.thumbnail && r !== hero).slice(0, 4);
             const more = web.filter(r => r !== hero).slice(0, 8);
