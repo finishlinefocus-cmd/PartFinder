@@ -736,9 +736,36 @@ export default function App() {
 
           {uSearched && !uLoading && (() => {
             // Assemble the shopping layout from the merged results.
-            const priced = uWeb.filter(r => Number(r.price) > 0).sort((a, b) => a.price - b.price);
-            const unpriced = uWeb.filter(r => !(Number(r.price) > 0));
-            const hero = uWeb.find(r => r.thumbnail) || uWeb[0] || null;
+            // Honest seller names: our Volusion rows come back labeled with their CATEGORY
+            // ("Stanley", "Push Plates") and Apify rows as "Apify · scraper" — map both by URL.
+            const sellerOf = (r) => {
+              const link = String(r.link || '');
+              if (link.includes('automaticsandmore.com')) return 'Automatics & More (website)';
+              if (link.includes('addisonautomatics.com')) return 'Addison Automatics';
+              if (String(r.source || '').startsWith('Apify')) return 'Google Shopping';
+              return r.source || 'Web';
+            };
+            // Relevance: a result must carry the query's tokens in its title (kills the
+            // "Stanley Collins card trick" class of Google noise).
+            const normT = (v) => String(v || '').toUpperCase().replace(/[^A-Z0-9 ]/g, ' ');
+            const qTokens = normT(uQ).split(/\s+/).filter(t => t.length >= 2);
+            const relevant = (r) => {
+              if (!qTokens.length) return true;
+              const hayA = normT(r.title).replace(/ /g, '');
+              const hit = qTokens.filter(t => normT(r.title).includes(t) || hayA.includes(t.replace(/ /g, ''))).length;
+              return hit >= Math.max(1, Math.ceil(qTokens.length * 0.6));
+            };
+            // Dedupe: the same listing often arrives once per category export.
+            const seen = new Set();
+            const web = uWeb.filter(relevant).filter(r => {
+              const k = `${sellerOf(r)}|${Number(r.price) || 0}|${normT(r.title)}`;
+              if (seen.has(k)) return false;
+              seen.add(k);
+              return true;
+            });
+            const priced = web.filter(r => Number(r.price) > 0).sort((a, b) => a.price - b.price);
+            const tokenScore = (r) => qTokens.filter(t => normT(r.title).includes(t)).length;
+            const hero = [...web].sort((a, b) => (tokenScore(b) - tokenScore(a)) || ((b.thumbnail ? 1 : 0) - (a.thumbnail ? 1 : 0)))[0] || null;
             // Prefer the inventory/cost row that actually carries the query in its
             // part number or name (the first API hit can be a sibling accessory).
             const norm = (v) => String(v || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -753,14 +780,14 @@ export default function App() {
             const marketHigh = priced.length ? priced[priced.length - 1].price : null;
             const suggested = costHit ? computePricing(costHit.unitCost, pcTargetMargin, marketLow).suggested : null;
             // Our own listing joins the buying options, ranked by OUR suggested retail.
-            const options = [...priced.map(r => ({ kind: 'web', seller: r.source, price: r.price, note: r.condition && r.condition !== 'unknown' ? r.condition : '', link: r.link, shipping: r.shipping }))];
+            const options = [...priced.map(r => ({ kind: sellerOf(r).startsWith('Automatics') ? 'ourweb' : 'web', seller: sellerOf(r), price: r.price, title: r.title, note: r.condition && r.condition !== 'unknown' ? r.condition : '', link: r.link, shipping: r.shipping }))];
             if (costHit) {
               options.push({ kind: 'ours', seller: 'Automatics & More', price: suggested, note: invHit ? `${invHit.available} on hand · ${invHit.location || 'our shelf'}` : 'our stock', link: null, cost: costHit.unitCost });
               options.sort((a, b) => (a.price ?? 1e12) - (b.price ?? 1e12));
             }
-            const thumbs = uWeb.filter(r => r.thumbnail && r !== hero).slice(0, 4);
-            const more = uWeb.filter(r => r !== hero).slice(0, 8);
-            if (!uWeb.length && !invHit && !costHit) {
+            const thumbs = web.filter(r => r.thumbnail && r !== hero).slice(0, 4);
+            const more = web.filter(r => r !== hero).slice(0, 8);
+            if (!web.length && !invHit && !costHit) {
               return <div style={{ textAlign: 'center', color: '#9aa0a6', fontSize: 13, padding: 30 }}>Nothing found — try a different part number or fewer words.</div>;
             }
             return (
@@ -824,10 +851,14 @@ export default function App() {
                               <span style={{ fontWeight: 700, fontSize: 13, color: o.kind === 'ours' ? '#0f766e' : '#1a73e8' }}>
                                 {i === 0 && <span style={{ background: '#e6f4ea', color: '#137333', borderRadius: 6, padding: '1px 6px', fontSize: 10, fontWeight: 800, marginRight: 6 }}>Best price</span>}
                                 {o.kind === 'ours' && <span style={{ background: '#0f766e', color: '#fff', borderRadius: 6, padding: '1px 6px', fontSize: 10, fontWeight: 800, marginRight: 6 }}>OURS</span>}
+                                {o.kind === 'ourweb' && <span style={{ background: '#134e4a', color: '#fff', borderRadius: 6, padding: '1px 6px', fontSize: 10, fontWeight: 800, marginRight: 6 }}>OUR SITE</span>}
                                 {o.seller}
                               </span>
                               <span style={{ fontWeight: 800, fontSize: 15, color: '#137333' }}>{o.price != null ? '$' + Number(o.price).toFixed(2) : '—'}</span>
                             </div>
+                            {o.title && o.kind !== 'ours' && (
+                              <div style={{ fontSize: 11.5, color: '#3c4043', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o.title}</div>
+                            )}
                             <div style={{ fontSize: 11.5, color: '#70757a', marginTop: 2 }}>
                               {o.kind === 'ours' ? `cost $${Number(o.cost).toFixed(2)} · ${o.note}` : [o.note, o.shipping > 0 ? `+$${o.shipping} shipping` : 'shipping varies'].filter(Boolean).join(' · ')}
                             </div>
@@ -854,7 +885,7 @@ export default function App() {
                               : <div style={{ width: '100%', height: 110, background: '#fafafa', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26 }}>📦</div>}
                             <div style={{ fontSize: 12.5, fontWeight: 600, marginTop: 6, lineHeight: 1.3, maxHeight: 34, overflow: 'hidden' }}>{r.title}</div>
                             {Number(r.price) > 0 && <div style={{ fontSize: 13, fontWeight: 800, color: '#137333', marginTop: 3 }}>${Number(r.price).toFixed(2)}</div>}
-                            <div style={{ fontSize: 11, color: '#70757a', marginTop: 2 }}>{r.source}</div>
+                            <div style={{ fontSize: 11, color: '#70757a', marginTop: 2 }}>{sellerOf(r)}</div>
                           </div>
                         </a>
                       ))}
