@@ -992,7 +992,7 @@ export default function App() {
                           <button type="button" onClick={() => setSupplierView(null)} style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: 14, color: '#70757a' }}>✕</button>
                         </span>
                       </div>
-                      <iframe title={supplierView.name} src={supplierView.url} style={{ width: '100%', height: '72vh', border: 'none', display: 'block', background: '#fff' }} />
+                      <iframe title={supplierView.name} src={supplierView.url} sandbox="allow-scripts allow-forms allow-popups allow-same-origin" referrerPolicy="no-referrer" style={{ width: '100%', height: '72vh', border: 'none', display: 'block', background: '#fff' }} />
                     </div>
                   )}
                   </div>
