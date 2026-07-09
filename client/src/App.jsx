@@ -852,7 +852,9 @@ export default function App() {
             return (
               <div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 340px', gap: 18, alignItems: 'start' }}>
-                  {/* LEFT — product hero */}
+                  {/* LEFT — product hero + embedded supplier browser (fills the blank
+                      space under the hero; rail stays on the right — Sterling 2026-07-09) */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 14, minWidth: 0 }}>
                   <div style={{ ...styles.card }}>
                     <div style={{ fontSize: 17, fontWeight: 700, marginBottom: 10 }}>{hero ? hero.title : (invHit ? invHit.name : uQ)}</div>
                     <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
@@ -891,6 +893,21 @@ export default function App() {
                         )}
                       </div>
                     </div>
+                  </div>
+
+                  {supplierView && (
+                    <div style={{ border: '1px solid #e8eaed', borderRadius: 12, overflow: 'hidden' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: '#f8f9fa', borderBottom: '1px solid #e8eaed' }}>
+                        <span style={{ fontSize: 13, fontWeight: 700 }}>{supplierView.name}</span>
+                        <span style={{ fontSize: 11, color: '#9aa0a6' }}>if this stays blank, the site blocks embedding — use the new-tab button</span>
+                        <span style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+                          <a href={supplierView.url} target="_blank" rel="noreferrer" style={{ fontSize: 12, fontWeight: 700, color: '#1a73e8', textDecoration: 'none' }}>Open in new tab ↗</a>
+                          <button type="button" onClick={() => setSupplierView(null)} style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: 14, color: '#70757a' }}>✕</button>
+                        </span>
+                      </div>
+                      <iframe title={supplierView.name} src={supplierView.url} style={{ width: '100%', height: '72vh', border: 'none', display: 'block', background: '#fff' }} />
+                    </div>
+                  )}
                   </div>
 
                   {/* RIGHT — buying options, cheapest first */}
@@ -958,19 +975,6 @@ export default function App() {
                       </button>
                     ))}
                   </div>
-                  {supplierView && (
-                    <div style={{ marginTop: 12, border: '1px solid #e8eaed', borderRadius: 12, overflow: 'hidden' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: '#f8f9fa', borderBottom: '1px solid #e8eaed' }}>
-                        <span style={{ fontSize: 13, fontWeight: 700 }}>{supplierView.name}</span>
-                        <span style={{ fontSize: 11, color: '#9aa0a6' }}>if this stays blank, the site blocks embedding — use the new-tab button</span>
-                        <span style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
-                          <a href={supplierView.url} target="_blank" rel="noreferrer" style={{ fontSize: 12, fontWeight: 700, color: '#1a73e8', textDecoration: 'none' }}>Open in new tab ↗</a>
-                          <button type="button" onClick={() => setSupplierView(null)} style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: 14, color: '#70757a' }}>✕</button>
-                        </span>
-                      </div>
-                      <iframe title={supplierView.name} src={supplierView.url} style={{ width: '100%', height: '70vh', border: 'none', display: 'block', background: '#fff' }} />
-                    </div>
-                  )}
                 </div>
               </div>
             );
