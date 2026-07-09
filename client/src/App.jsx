@@ -68,6 +68,7 @@ export default function App() {
   // page under the results — the buying-options rail stays visible on the right.
   const [supplierView, setSupplierView] = useState(null); // { name, url } | null
   const [uWebLoading, setUWebLoading] = useState(false); // web prices still streaming in
+  const [showAllOffers, setShowAllOffers] = useState(false);
   const [recent, setRecent] = useState(() => { try { return JSON.parse(localStorage.getItem('pf_recent') || '[]'); } catch { return []; } });
   const uRunId = React.useRef(0); // cancels stale streams when a new search starts
   useEffect(() => { loadDistributors().catch(() => {}); }, []);
@@ -79,6 +80,7 @@ export default function App() {
     setULoading(true); setUWebLoading(true); setUErr(''); setUSearched(true);
     setUWeb([]); setUInv([]); setUCost([]);
     setSupplierView(null);
+    setShowAllOffers(false);
     // remember recent searches (last 6)
     setRecent(prev => {
       const next = [q, ...prev.filter(x => x !== q)].slice(0, 6);
@@ -121,12 +123,18 @@ export default function App() {
       grab('/nexus-semantic?q=' + encodeURIComponent(cleaned)),
     ]);
     if (runId !== uRunId.current) return; // superseded by a newer search
-    mergeRows(((cat && cat.items) || []).map(c => ({
-      id: c.id, title: c.description, source: c.distributor,
-      price: Number(c.price) || 0, shipping: 0, condition: 'unknown',
-      link: c.distributorId === 'addison' ? 'https://www.addisonautomatics.com/catalog/' : null,
-      thumbnail: c.thumbnail || null, via: 'catalog',
-    })));
+    mergeRows(((cat && cat.items) || []).map(c => {
+      // am-* rows are OUR Volusion site (their 'distributor' is a category name like
+      // "BEA"/"Push Plates" — mislabeled sellers + escaped the our-site cap).
+      const ours = String(c.distributorId || '').startsWith('am');
+      return {
+        id: c.id, title: c.description,
+        source: ours ? 'Automatics & More (website)' : c.distributor,
+        price: Number(c.price) || 0, shipping: 0, condition: 'unknown',
+        link: c.link || c.url || (c.distributorId === 'addison' ? 'https://www.addisonautomatics.com/catalog/' : null),
+        thumbnail: c.thumbnail || null, via: 'catalog',
+      };
+    }));
     for (const r of (sem && sem.results) || []) {
       const title = r.name || r.description || '';
       if (!title) continue;
@@ -863,6 +871,24 @@ export default function App() {
               options.push({ kind: 'ours', seller: 'Automatics & More', price: suggested, note: invHit ? `${invHit.available} on hand · ${invHit.location || 'our shelf'}` : 'our stock', link: null, cost: costHit.unitCost });
               options.sort((a, b) => (a.price ?? 1e12) - (b.price ?? 1e12));
             }
+            // The rail is for COMPARING sellers — our own website listings were drowning
+            // it (Sterling 2026-07-09). Cap rows per seller (1 for our site, 2 for
+            // everyone else); the overflow hides behind a "show more" expander.
+            if (!showAllOffers) {
+              const perSeller = {};
+              const overflow = [];
+              const kept = [];
+              for (const o of options) {
+                const cap = o.kind === 'ourweb' ? 1 : o.kind === 'ours' ? 99 : 2;
+                perSeller[o.seller] = (perSeller[o.seller] || 0) + 1;
+                if (perSeller[o.seller] <= cap) kept.push(o); else overflow.push(o);
+              }
+              if (overflow.length) {
+                options.length = 0;
+                options.push(...kept);
+                options.hiddenCount = overflow.length;
+              }
+            }
             // Unpriced listings continue DOWN the same list (was a separate "More
             // options" grid — Sterling 2026-07-09: one list on the right).
             for (const r of unpriced) {
@@ -997,6 +1023,18 @@ export default function App() {
                           </React.Fragment>
                         );
                       })}
+                      {!showAllOffers && options.hiddenCount > 0 && (
+                        <button type="button" onClick={() => setShowAllOffers(true)}
+                          style={{ cursor: 'pointer', border: '1px dashed #dadce0', background: '#fff', color: '#1a73e8', borderRadius: 12, padding: '8px 12px', fontSize: 12, fontWeight: 700 }}>
+                          Show {options.hiddenCount} more listing{options.hiddenCount === 1 ? '' : 's'}
+                        </button>
+                      )}
+                      {showAllOffers && (
+                        <button type="button" onClick={() => setShowAllOffers(false)}
+                          style={{ cursor: 'pointer', border: 'none', background: 'none', color: '#70757a', fontSize: 12, fontWeight: 700 }}>
+                          Show fewer
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
