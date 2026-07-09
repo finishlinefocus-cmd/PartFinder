@@ -98,7 +98,29 @@ export default function App() {
     // catalogs fill the quota before the live web search ever contributed
     // (Sterling: "it only searches Nexus now").
     const first = variants.slice(0, 3);
+    // Nexus semantic search (vector, Ollama) rides along with the first round —
+    // plain-English queries hit even when exact words don't match.
+    const semP = grab('/nexus-semantic?q=' + encodeURIComponent(variants[Math.min(2, variants.length - 1)]));
     (await Promise.all(first.map(v => grab('/api/search?q=' + encodeURIComponent(v) + '&condition=Any')))).forEach(merge);
+    const sem = await semP;
+    for (const r of (sem && sem.results) || []) {
+      const title = r.name || r.description || '';
+      const k = `sem|${r.vendor}|${r.sku || r.mfgPart}|${title}`;
+      if (seenIds.has(k) || !title) continue;
+      seenIds.add(k);
+      webAll.push({
+        id: k,
+        title,
+        source: r.vendor === 'shortly' ? 'Our shelf' : (r.vendor === 'addison' ? 'Addison Automatics' : r.vendor === 'doorcontrols' ? 'Door Controls' : (r.brand || 'Catalog')),
+        price: Number(r.price ?? r.list ?? r.net) || 0,
+        shipping: 0,
+        condition: 'unknown',
+        link: r.url || null,
+        thumbnail: r.image || null,
+        via: 'semantic',
+        score: r.score,
+      });
+    }
     for (const v of variants.slice(3)) {
       if (webAll.length >= 6) break;
       merge(await grab('/api/search?q=' + encodeURIComponent(v) + '&condition=Any'));
