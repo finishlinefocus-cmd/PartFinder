@@ -64,6 +64,9 @@ export default function App() {
   const [uInv, setUInv] = useState([]);
   const [uCost, setUCost] = useState([]);
   const [uErr, setUErr] = useState('');
+  // Embedded supplier browser (Sterling 2026-07-09): vendor sites open INSIDE the
+  // page under the results — the buying-options rail stays visible on the right.
+  const [supplierView, setSupplierView] = useState(null); // { name, url } | null
   useEffect(() => { loadDistributors().catch(() => {}); }, []);
   async function runUnified(e) {
     if (e) e.preventDefault();
@@ -117,7 +120,7 @@ export default function App() {
         shipping: 0,
         condition: 'unknown',
         link: r.url || null,
-        thumbnail: r.image || null,
+        thumbnail: (r.image && /^https?:/.test(r.image)) ? r.image : null,
         via: 'semantic',
         score: r.score,
       });
@@ -819,9 +822,15 @@ export default function App() {
             const marketHigh = priced.length ? priced[priced.length - 1].price : null;
             const suggested = costHit ? computePricing(costHit.unitCost, pcTargetMargin, marketLow).suggested : null;
             // Our own listing joins the buying options, ranked by OUR suggested retail.
-            const unpriced = web.filter(r => !(Number(r.price) > 0) && r !== hero);
+            // Semantic hits are RELATED parts (siblings, accessories), not offers for
+            // THE product — they trail the rail under a divider instead of price-ranking
+            // ('Best price \$0.81' for a different part number was nonsense).
+            const isOffer = (r) => r.via !== 'semantic';
+            const offers = priced.filter(isOffer);
+            const related = web.filter(r => !isOffer(r) && r !== hero);
+            const unpriced = web.filter(r => !(Number(r.price) > 0) && r !== hero && isOffer(r));
             const options = [
-              ...priced.map(r => ({ kind: sellerOf(r).startsWith('Automatics') ? 'ourweb' : 'web', seller: sellerOf(r), price: r.price, title: r.title, note: r.condition && r.condition !== 'unknown' ? r.condition : '', link: r.link, shipping: r.shipping, thumb: r.thumbnail })),
+              ...offers.map(r => ({ kind: sellerOf(r).startsWith('Automatics') ? 'ourweb' : 'web', seller: sellerOf(r), price: r.price, title: r.title, note: r.condition && r.condition !== 'unknown' ? r.condition : '', link: r.link, shipping: r.shipping, thumb: r.thumbnail })),
             ];
             if (costHit) {
               options.push({ kind: 'ours', seller: 'Automatics & More', price: suggested, note: invHit ? `${invHit.available} on hand · ${invHit.location || 'our shelf'}` : 'our stock', link: null, cost: costHit.unitCost });
@@ -831,6 +840,9 @@ export default function App() {
             // options" grid — Sterling 2026-07-09: one list on the right).
             for (const r of unpriced) {
               options.push({ kind: 'web', seller: sellerOf(r), price: null, title: r.title, note: 'no price listed', link: r.link, thumb: r.thumbnail });
+            }
+            for (const r of related.slice(0, 10)) {
+              options.push({ kind: 'related', seller: r.source, price: Number(r.price) > 0 ? r.price : null, title: r.title, note: 'related part — our catalogs', link: r.link, thumb: r.thumbnail });
             }
             const thumbs = web.filter(r => r.thumbnail && r !== hero).slice(0, 4);
             const more = web.filter(r => r !== hero).slice(0, 8);
@@ -892,13 +904,14 @@ export default function App() {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                       {options.length === 0 && <div style={{ fontSize: 13, color: '#9aa0a6' }}>No priced listings found.</div>}
                       {options.map((o, i) => {
+                        const firstRelated = o.kind === 'related' && (i === 0 || options[i - 1].kind !== 'related');
                         const inner = (
                           <div style={{ display: 'flex', gap: 10, alignItems: 'center', border: '1px solid ' + (o.kind === 'ours' ? '#0f766e' : '#e8eaed'), background: o.kind === 'ours' ? '#f0fdfa' : '#fff', borderRadius: 12, padding: '10px 12px' }}>
                             {o.thumb && <img src={o.thumb} alt="" style={{ width: 44, height: 44, objectFit: 'contain', background: '#fafafa', borderRadius: 8, flexShrink: 0 }} />}
                             <div style={{ minWidth: 0, flex: 1 }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
                               <span style={{ fontWeight: 700, fontSize: 13, color: o.kind === 'ours' ? '#0f766e' : '#1a73e8' }}>
-                                {i === 0 && <span style={{ background: '#e6f4ea', color: '#137333', borderRadius: 6, padding: '1px 6px', fontSize: 10, fontWeight: 800, marginRight: 6 }}>Best price</span>}
+                                {i === 0 && o.kind !== 'related' && o.price != null && <span style={{ background: '#e6f4ea', color: '#137333', borderRadius: 6, padding: '1px 6px', fontSize: 10, fontWeight: 800, marginRight: 6 }}>Best price</span>}
                                 {o.kind === 'ours' && <span style={{ background: '#0f766e', color: '#fff', borderRadius: 6, padding: '1px 6px', fontSize: 10, fontWeight: 800, marginRight: 6 }}>OURS</span>}
                                 {o.kind === 'ourweb' && <span style={{ background: '#134e4a', color: '#fff', borderRadius: 6, padding: '1px 6px', fontSize: 10, fontWeight: 800, marginRight: 6 }}>OUR SITE</span>}
                                 {o.seller}
@@ -914,9 +927,15 @@ export default function App() {
                             </div>
                           </div>
                         );
-                        return o.link
-                          ? <a key={i} href={o.link} target="_blank" rel="noreferrer" style={{ textDecoration: 'none', color: 'inherit' }}>{inner}</a>
-                          : <div key={i}>{inner}</div>;
+                        const card = o.link
+                          ? <a href={o.link} target="_blank" rel="noreferrer" style={{ textDecoration: 'none', color: 'inherit' }}>{inner}</a>
+                          : inner;
+                        return (
+                          <React.Fragment key={i}>
+                            {firstRelated && <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#9aa0a6', margin: '6px 2px 0' }}>Related parts</div>}
+                            {card}
+                          </React.Fragment>
+                        );
                       })}
                     </div>
                   </div>
@@ -932,12 +951,26 @@ export default function App() {
                       🔎 Search Shortly (our inventory)
                     </a>
                     {distributors.filter(d => d.enabled && d.website).slice(0, 8).map(d => (
-                      <a key={d.id} href={d.website} target="_blank" rel="noreferrer"
-                        style={{ textDecoration: 'none', border: '1px solid #e8eaed', background: '#fff', color: '#1a73e8', borderRadius: 12, padding: '10px 14px', fontSize: 13, fontWeight: 700 }}>
+                      <button key={d.id} type="button"
+                        onClick={() => setSupplierView(supplierView && supplierView.url === d.website ? null : { name: d.name, url: d.website })}
+                        style={{ cursor: 'pointer', border: '1px solid ' + (supplierView && supplierView.url === d.website ? '#1a73e8' : '#e8eaed'), background: supplierView && supplierView.url === d.website ? '#e8f0fe' : '#fff', color: '#1a73e8', borderRadius: 12, padding: '10px 14px', fontSize: 13, fontWeight: 700 }}>
                         {d.name}
-                      </a>
+                      </button>
                     ))}
                   </div>
+                  {supplierView && (
+                    <div style={{ marginTop: 12, border: '1px solid #e8eaed', borderRadius: 12, overflow: 'hidden' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: '#f8f9fa', borderBottom: '1px solid #e8eaed' }}>
+                        <span style={{ fontSize: 13, fontWeight: 700 }}>{supplierView.name}</span>
+                        <span style={{ fontSize: 11, color: '#9aa0a6' }}>if this stays blank, the site blocks embedding — use the new-tab button</span>
+                        <span style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+                          <a href={supplierView.url} target="_blank" rel="noreferrer" style={{ fontSize: 12, fontWeight: 700, color: '#1a73e8', textDecoration: 'none' }}>Open in new tab ↗</a>
+                          <button type="button" onClick={() => setSupplierView(null)} style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: 14, color: '#70757a' }}>✕</button>
+                        </span>
+                      </div>
+                      <iframe title={supplierView.name} src={supplierView.url} style={{ width: '100%', height: '70vh', border: 'none', display: 'block', background: '#fff' }} />
+                    </div>
+                  )}
                 </div>
               </div>
             );
