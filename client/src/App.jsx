@@ -122,10 +122,10 @@ export default function App() {
 
     // ── PHASE 1 (instant): our catalogs, shelf, cost, semantic — renders immediately ──
     const [cat, inv, cost, sem] = await Promise.all([
-      grab('/api/distributor-catalog?q=' + encodeURIComponent(cleaned)),
-      grab('/api/inventory?q=' + encodeURIComponent(cleaned)),
-      grab('/api/cost?q=' + encodeURIComponent(cleaned)),
-      grab('/nexus-semantic?q=' + encodeURIComponent(cleaned)),
+      grab('/pf/api/distributor-catalog?q=' + encodeURIComponent(cleaned)),
+      grab('/pf/api/inventory?q=' + encodeURIComponent(cleaned)),
+      grab('/pf/api/cost?q=' + encodeURIComponent(cleaned)),
+      grab('/pf/nexus-semantic?q=' + encodeURIComponent(cleaned)),
     ]);
     if (runId !== uRunId.current) return; // superseded by a newer search
     mergeRows(((cat && cat.items) || []).map(c => {
@@ -158,13 +158,13 @@ export default function App() {
     // ── PHASE 2 (background): live web prices stream in as each variant lands ──
     try {
       await Promise.all(variants.slice(0, 3).map(v =>
-        grab('/api/search?q=' + encodeURIComponent(v) + '&condition=' + encodeURIComponent(uCond)).then(w => {
+        grab('/pf/api/search?q=' + encodeURIComponent(v) + '&condition=' + encodeURIComponent(uCond)).then(w => {
           if (runId === uRunId.current) mergeRows((w && w.results) || []);
         })));
       for (const v of variants.slice(3)) {
         if (runId !== uRunId.current) return;
         if (acc.filter(r => Number(r.price) > 0).length >= 6) break;
-        const w = await grab('/api/search?q=' + encodeURIComponent(v) + '&condition=' + encodeURIComponent(uCond));
+        const w = await grab('/pf/api/search?q=' + encodeURIComponent(v) + '&condition=' + encodeURIComponent(uCond));
         if (runId === uRunId.current) mergeRows((w && w.results) || []);
       }
     } finally {
@@ -247,9 +247,9 @@ export default function App() {
     setHomeLoading(true);
     try {
       const [invRes, costRes, availRes] = await Promise.all([
-        fetch('/api/inventory'),
-        fetch('/api/cost'),
-        fetch('/api/availability'),
+        fetch('/pf/api/inventory'),
+        fetch('/pf/api/cost'),
+        fetch('/pf/api/availability'),
       ]);
       const inv = await invRes.json();
       const cost = await costRes.json();
@@ -274,8 +274,8 @@ export default function App() {
     setAlertsError('');
     try {
       const [chRes, avRes] = await Promise.all([
-        fetch('/api/changes'),
-        fetch('/api/availability'),
+        fetch('/pf/api/changes'),
+        fetch('/pf/api/availability'),
       ]);
       const chData = await chRes.json();
       const avData = await avRes.json();
@@ -288,7 +288,7 @@ export default function App() {
   }
 
   async function loadDistributors() {
-    const res = await fetch('/api/distributors');
+    const res = await fetch('/pf/api/distributors');
     const data = await res.json();
     setDistributors(data.distributors || []);
   }
@@ -297,7 +297,7 @@ export default function App() {
     setCatalogLoading(true);
     setCatalogError('');
     try {
-      const res = await fetch('/api/distributor-catalog?q=' + encodeURIComponent(q));
+      const res = await fetch('/pf/api/distributor-catalog?q=' + encodeURIComponent(q));
       const data = await res.json();
       setCatalogItems(data.items || []);
       setCatalogUpdatedAt(data.updatedAt || null);
@@ -311,7 +311,7 @@ export default function App() {
     setRefreshingDistributor(id);
     setCatalogError('');
     try {
-      const res = await fetch('/api/distributors/' + encodeURIComponent(id) + '/refresh', {
+      const res = await fetch('/pf/api/distributors/' + encodeURIComponent(id) + '/refresh', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
@@ -372,7 +372,7 @@ export default function App() {
       // Re-import with the corrected column mapping / headline-price choice for this vendor.
       if (opts.overrides) body.overrides = opts.overrides;
       if (opts.priceMode) body.priceMode = opts.priceMode;
-      const res = await fetch('/api/distributors/' + encodeURIComponent(importTarget) + '/import', {
+      const res = await fetch('/pf/api/distributors/' + encodeURIComponent(importTarget) + '/import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -395,7 +395,7 @@ export default function App() {
     setRefreshingAutomaticsMore(true);
     setCatalogError('');
     try {
-      const res = await fetch('/api/distributors/refresh-automatics-and-more', {
+      const res = await fetch('/pf/api/distributors/refresh-automatics-and-more', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
@@ -417,7 +417,7 @@ export default function App() {
     setRefreshingConnected(true);
     setCatalogError('');
     try {
-      const res = await fetch('/api/distributors/refresh-connected', {
+      const res = await fetch('/pf/api/distributors/refresh-connected', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
@@ -446,7 +446,7 @@ export default function App() {
     setSearched(true);
     const q = [manufacturer, query, partNumber].filter(Boolean).join(' ');
     try {
-      const res = await fetch('/api/search?q=' + encodeURIComponent(q) + '&condition=' + condition);
+      const res = await fetch('/pf/api/search?q=' + encodeURIComponent(q) + '&condition=' + condition);
       const data = await res.json();
       setResults(data.results || []);
     } catch (err) {
@@ -467,7 +467,7 @@ export default function App() {
     setInvError('');
     setInvSearched(true);
     try {
-      const res = await fetch('/api/inventory?q=' + encodeURIComponent(q));
+      const res = await fetch('/pf/api/inventory?q=' + encodeURIComponent(q));
       const data = await res.json();
       setInvResults(data.items || []);
       setInvSource(data.source || null);
@@ -492,7 +492,7 @@ export default function App() {
     setPcSelected(null);
     setPcRetailOverride('');
     try {
-      const res = await fetch('/api/cost?q=' + encodeURIComponent(q));
+      const res = await fetch('/pf/api/cost?q=' + encodeURIComponent(q));
       const data = await res.json();
       const items = data.items || [];
       setPcCostItems(items);
