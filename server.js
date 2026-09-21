@@ -125,7 +125,22 @@ const DISTRIBUTORS = [
     website: 'https://www.servicespring.com/',
     type: 'managed-distributor',
     enabled: true,
-    notes: 'Managed distributor entry. Catalog/order links are hosted through shop.servicespring.com; scraper not connected yet.',
+    notes: 'Managed distributor entry. Catalog/order links are hosted through shop.servicespring.com; no public scraper — Nexus pushes our signed-in account prices in via /api/distributors/service-spring/import.',
+    categories: [],
+  },
+  {
+    /*
+     * Added 2026-09-21 so Nexus can push our real CRL prices in. Nexus crawls CRL signed in and
+     * reads the "Your Price" quantity-break column, falling back to "Standard Price" per part —
+     * so its rows arrive tagged per item and only the account ones land in netPrice. Without a
+     * distributor entry here that import had nowhere to go (the route 404s on an unknown id).
+     */
+    id: 'crl',
+    name: 'C.R. Laurence',
+    website: 'https://www.crlaurence.com/',
+    type: 'managed-distributor',
+    enabled: true,
+    notes: 'Managed distributor entry. Priced from Nexus (signed-in crawl) via /api/distributors/crl/import; no public scraper here.',
     categories: [],
   },
   {
