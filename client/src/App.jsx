@@ -53,6 +53,124 @@ const TILE_META = {
 export default function App() {
   const [activeTab, setActiveTab] = useState('home');
   const [role, setRole] = useState('sales'); // department lens for the Home dashboard
+  // ── ONE SEARCH (Sterling 2026-07-09): the landing is a single bar that fans out to
+  //    every tool at once — web prices, our shelf, our cost/suggested retail, and the
+  //    distributor catalogs — rendered like a shopping product page (hero + buying
+  //    options cheapest-first + more options).
+  const [uQ, setUQ] = useState('');
+  const [uLoading, setULoading] = useState(false);
+  const [uSearched, setUSearched] = useState(false);
+  const [uWeb, setUWeb] = useState([]);
+  const [uInv, setUInv] = useState([]);
+  const [uCost, setUCost] = useState([]);
+  const [uErr, setUErr] = useState('');
+  // Embedded supplier browser (Sterling 2026-07-09): vendor sites open INSIDE the
+  // page under the results — the buying-options rail stays visible on the right.
+  const [supplierView, setSupplierView] = useState(null); // { name, url } | null
+  const [uWebLoading, setUWebLoading] = useState(false); // web prices still streaming in
+  const [showAllOffers, setShowAllOffers] = useState(false);
+  // The four classic criteria (Sterling 2026-07-09: "put back the four search
+  // criterias") — description (the big bar), part #, manufacturer, condition.
+  const [uPart, setUPart] = useState('');
+  const [uMfg, setUMfg] = useState('');
+  const [uCond, setUCond] = useState('Any');
+  const [recent, setRecent] = useState(() => { try { return JSON.parse(localStorage.getItem('pf_recent') || '[]'); } catch { return []; } });
+  const uRunId = React.useRef(0); // cancels stale streams when a new search starts
+  useEffect(() => { loadDistributors().catch(() => {}); }, []);
+  async function runUnified(e) {
+    if (e) e.preventDefault();
+    const q = [uMfg, uQ, uPart].map(v => v.trim()).filter(Boolean).join(' ');
+    if (!q) return;
+    const runId = ++uRunId.current;
+    setULoading(true); setUWebLoading(true); setUErr(''); setUSearched(true);
+    setUWeb([]); setUInv([]); setUCost([]);
+    setSupplierView(null);
+    setShowAllOffers(false);
+    // remember recent searches (last 6)
+    setRecent(prev => {
+      const next = [q, ...prev.filter(x => x !== q)].slice(0, 6);
+      try { localStorage.setItem('pf_recent', JSON.stringify(next)); } catch { /* private mode */ }
+      return next;
+    });
+    const grab = (url) => fetch(url).then(r => r.json()).catch(() => null);
+    const CONDITION_WORDS = /\b(REBUILT|RBLT|NEW|USED|OEM|EXCH|EXCHANGE|RECON|REFURB(ISHED)?)\b/gi;
+    const variants = [];
+    const push = (v) => { const t = v.replace(/\s+/g, ' ').trim(); if (t && !variants.includes(t)) variants.push(t); };
+    push(q);
+    push(q.replace(/\([^)]*\)/g, ' '));
+    push(q.replace(/\([^)]*\)/g, ' ').replace(CONDITION_WORDS, ' '));
+    const toks = q.replace(/\([^)]*\)/g, ' ').replace(CONDITION_WORDS, ' ').replace(/[^A-Za-z0-9 ]/g, ' ').split(/\s+/).filter(Boolean);
+    if (toks.length > 3) push(toks.slice(0, 3).join(' '));
+    if (toks.length > 2) push(toks.slice(0, 2).join(' '));
+    const cleaned = variants[Math.min(2, variants.length - 1)];
+
+    // stable dedupe key across phases/endpoints
+    const keyOf = (r) => `${(r.source || '').toUpperCase()}|${String(r.title || '').toUpperCase().replace(/[^A-Z0-9]/g, '')}|${Number(r.price) || 0}`;
+    const seen = new Set();
+    let acc = [];
+    const mergeRows = (rows) => {
+      let added = false;
+      for (const r of rows) {
+        const k = keyOf(r);
+        if (seen.has(k)) continue;
+        seen.add(k);
+        acc.push(r);
+        added = true;
+      }
+      if (added && runId === uRunId.current) setUWeb([...acc]);
+    };
+
+    // ── PHASE 1 (instant): our catalogs, shelf, cost, semantic — renders immediately ──
+    const [cat, inv, cost, sem] = await Promise.all([
+      grab('/api/distributor-catalog?q=' + encodeURIComponent(cleaned)),
+      grab('/api/inventory?q=' + encodeURIComponent(cleaned)),
+      grab('/api/cost?q=' + encodeURIComponent(cleaned)),
+      grab('/nexus-semantic?q=' + encodeURIComponent(cleaned)),
+    ]);
+    if (runId !== uRunId.current) return; // superseded by a newer search
+    mergeRows(((cat && cat.items) || []).map(c => {
+      // am-* rows are OUR Volusion site (their 'distributor' is a category name like
+      // "BEA"/"Push Plates" — mislabeled sellers + escaped the our-site cap).
+      const ours = String(c.distributorId || '').startsWith('am');
+      return {
+        id: c.id, title: c.description,
+        source: ours ? 'Automatics & More (website)' : c.distributor,
+        price: Number(c.price) || 0, shipping: 0, condition: 'unknown',
+        link: c.link || c.url || (c.distributorId === 'addison' ? 'https://www.addisonautomatics.com/catalog/' : null),
+        thumbnail: c.thumbnail || null, via: 'catalog',
+      };
+    }));
+    for (const r of (sem && sem.results) || []) {
+      const title = r.name || r.description || '';
+      if (!title) continue;
+      mergeRows([{
+        id: `sem|${r.vendor}|${r.sku || r.mfgPart}`, title,
+        source: r.vendor === 'shortly' ? 'Our shelf' : (r.vendor === 'addison' ? 'Addison Automatics' : r.vendor === 'doorcontrols' ? 'Door Controls' : (r.brand || 'Catalog')),
+        price: Number(r.price ?? r.list ?? r.net) || 0, shipping: 0, condition: 'unknown',
+        link: r.url || null, thumbnail: (r.image && /^https?:/.test(r.image)) ? r.image : null,
+        via: 'semantic', score: r.score,
+      }]);
+    }
+    setUInv((inv && inv.items) || []);
+    setUCost((cost && cost.items) || []);
+    setULoading(false); // page renders NOW — web prices keep streaming below
+
+    // ── PHASE 2 (background): live web prices stream in as each variant lands ──
+    try {
+      await Promise.all(variants.slice(0, 3).map(v =>
+        grab('/api/search?q=' + encodeURIComponent(v) + '&condition=' + encodeURIComponent(uCond)).then(w => {
+          if (runId === uRunId.current) mergeRows((w && w.results) || []);
+        })));
+      for (const v of variants.slice(3)) {
+        if (runId !== uRunId.current) return;
+        if (acc.filter(r => Number(r.price) > 0).length >= 6) break;
+        const w = await grab('/api/search?q=' + encodeURIComponent(v) + '&condition=' + encodeURIComponent(uCond));
+        if (runId === uRunId.current) mergeRows((w && w.results) || []);
+      }
+    } finally {
+      if (runId === uRunId.current) setUWebLoading(false);
+    }
+  }
   const [query, setQuery] = useState('');
   const [partNumber, setPartNumber] = useState('');
   const [manufacturer, setManufacturer] = useState('');
@@ -658,59 +776,324 @@ export default function App() {
 
       <div style={styles.topBar}>
         <div style={styles.tabs}>
-          <button style={{ ...styles.tab, ...(activeTab === 'home' ? styles.tabActive : {}) }} onClick={() => setActiveTab('home')}>Home</button>
-          <button style={{ ...styles.tab, ...(activeTab === 'search' ? styles.tabActive : {}) }} onClick={() => setActiveTab('search')}>Price Search</button>
-          <button style={{ ...styles.tab, ...(activeTab === 'availability' ? styles.tabActive : {}) }} onClick={() => setActiveTab('availability')}>Availability</button>
-          <button style={{ ...styles.tab, ...(activeTab === 'pricing' ? styles.tabActive : {}) }} onClick={() => setActiveTab('pricing')}>Pricing Engine</button>
+          {/* One search covers Price Search / Availability / Pricing / Alerts
+              (Sterling 2026-07-09) — only the Price Lists maintenance lane remains. */}
+          <button style={{ ...styles.tab, ...(activeTab === 'home' ? styles.tabActive : {}) }} onClick={() => setActiveTab('home')}>Search</button>
           <button style={{ ...styles.tab, ...(activeTab === 'distributors' ? styles.tabActive : {}) }} onClick={() => setActiveTab('distributors')}>Price Lists</button>
-          <button style={{ ...styles.tab, ...(activeTab === 'changes' ? styles.tabActive : {}) }} onClick={() => setActiveTab('changes')}>
-            Changes &amp; Alerts
-            {availability && availability.unavailable && availability.unavailable.length > 0 && (
-              <span style={{ marginLeft: 6, fontSize: 11, fontWeight: 700, padding: '1px 7px', borderRadius: 999, background: '#FCEBEB', color: '#A32D2D' }}>
-                {availability.unavailable.length}
-              </span>
-            )}
-          </button>
         </div>
-        <div style={styles.roleSwitch}>
-          <span style={{ fontSize: 12, color: '#666' }}>Viewing as</span>
-          <select style={styles.roleSelect} value={role} onChange={e => setRole(e.target.value)}>
-            {Object.entries(ROLES).map(([key, r]) => (
-              <option key={key} value={key}>{r.label}</option>
-            ))}
-          </select>
-        </div>
+        {/* "Viewing as" removed (Sterling 2026-07-09) — it only drove the retired
+            Home tile dashboard; the one-search landing is the same for everyone. */}
       </div>
 
       {activeTab === 'home' && (
         <>
-          <div style={{ marginBottom: 14 }}>
-            <div style={{ fontSize: 18, fontWeight: 600 }}>{ROLES[role].label} dashboard</div>
-            <div style={{ color: '#666', fontSize: 13 }}>
-              Your team mostly works in <strong>{TAB_LABELS[ROLES[role].home]}</strong> ({ROLES[role].blurb}).
-              Every lane is open to everyone — switch your view top-right.
-            </div>
+          {/* ONE SEARCH — every tool behind a single bar (web prices, our shelf,
+              our cost/retail, distributor catalogs), shopping-page layout. */}
+          <form onSubmit={runUnified} style={{ display: 'flex', gap: 10, margin: '18px auto 22px', maxWidth: 720 }}>
+            <input
+              value={uQ}
+              onChange={e => setUQ(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); runUnified(); } }}
+              placeholder="Description — or anything: part number, name, plain English…"
+              style={{ flex: 1, padding: '13px 18px', fontSize: 16, border: '2px solid #dcdcdc', borderRadius: 999, outline: 'none' }}
+            />
+            <button type="submit" disabled={uLoading || !uQ.trim()}
+              style={{ padding: '0 26px', fontSize: 15, fontWeight: 700, color: '#fff', background: '#0f766e', border: 'none', borderRadius: 999, cursor: 'pointer', opacity: uLoading || !uQ.trim() ? 0.5 : 1 }}>
+              {uLoading ? 'Searching…' : 'Search'}
+            </button>
+          </form>
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap', margin: '-8px auto 16px', maxWidth: 720 }}>
+            <input value={uPart} onChange={e => setUPart(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); runUnified(); } }}
+              placeholder="Part #"
+              style={{ flex: 1, minWidth: 140, padding: '9px 14px', fontSize: 13, border: '1.5px solid #dcdcdc', borderRadius: 10, outline: 'none' }} />
+            <input value={uMfg} onChange={e => setUMfg(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); runUnified(); } }}
+              placeholder="Manufacturer"
+              style={{ flex: 1, minWidth: 140, padding: '9px 14px', fontSize: 13, border: '1.5px solid #dcdcdc', borderRadius: 10, outline: 'none' }} />
+            <select value={uCond} onChange={e => setUCond(e.target.value)}
+              style={{ padding: '9px 12px', fontSize: 13, border: '1.5px solid #dcdcdc', borderRadius: 10, background: '#fff' }}>
+              <option>Any</option>
+              <option>New</option>
+              <option>Used</option>
+            </select>
           </div>
-
-          {renderHomeTile(HOME_TILES[role][0], true)}
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12, marginTop: 12 }}>
-            {HOME_TILES[role].slice(1).map(lane => renderHomeTile(lane, false))}
-          </div>
-
-          {homeSummary && homeSummary.lowItems.length > 0 && (
-            <div style={{ ...styles.card, marginTop: 12 }}>
-              <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 8 }}>Stock needing attention</div>
-              {homeSummary.lowItems.map(it => (
-                <div key={it.sku} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, padding: '6px 0', borderBottom: '1px solid #f0f0f0', fontSize: 13 }}>
-                  <span>{it.name} <span style={{ color: '#999' }}>· {it.partNumber}</span></span>
-                  <span style={stockBadgeStyle(it.status)}>{STOCK_LABELS[it.status]} ({it.available})</span>
-                </div>
+          {recent.length > 0 && (
+            <div style={{ display: 'flex', gap: 6, justifyContent: 'center', alignItems: 'center', flexWrap: 'wrap', margin: '-10px 0 14px' }}>
+              <span style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#bdc1c6' }}>Recent</span>
+              {recent.slice(0, 4).map(rq => (
+                <button key={rq} type="button" title={rq} onClick={() => { setUQ(rq); setTimeout(runUnified, 0); }}
+                  style={{ cursor: 'pointer', border: '1px solid #eef0f2', background: '#f8f9fa', color: '#80868b', borderRadius: 999, padding: '2px 10px', fontSize: 11, maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {rq}
+                </button>
               ))}
+              <button type="button" title="Clear recent searches"
+                onClick={() => { setRecent([]); try { localStorage.removeItem('pf_recent'); } catch { /* private mode */ } }}
+                style={{ cursor: 'pointer', border: 'none', background: 'none', color: '#bdc1c6', fontSize: 12, padding: 2 }}>✕</button>
             </div>
           )}
+          {uErr && <div style={{ color: '#b91c1c', fontSize: 13, textAlign: 'center' }}>{uErr}</div>}
+          {!uSearched && !uLoading && (
+            <div style={{ textAlign: 'center', color: '#9aa0a6', fontSize: 13 }}>
+              One search, everything at once — live web prices, what's on our shelves, our cost &amp; suggested retail, and every distributor catalog.
+            </div>
+          )}
+          {uLoading && <div style={{ textAlign: 'center', color: '#9aa0a6', fontSize: 13, padding: 30 }}>Comparing prices everywhere…</div>}
 
-          {homeLoading && <div style={{ fontSize: 12, color: '#999', marginTop: 10 }}>Loading summary…</div>}
+          {uSearched && !uLoading && (() => {
+            // Assemble the shopping layout from the merged results.
+            // Honest seller names: our Volusion rows come back labeled with their CATEGORY
+            // ("Stanley", "Push Plates") and Apify rows as "Apify · scraper" — map both by URL.
+            const sellerOf = (r) => {
+              const link = String(r.link || '');
+              if (link.includes('automaticsandmore.com')) return 'Automatics & More (website)';
+              if (link.includes('addisonautomatics.com')) return 'Addison Automatics';
+              if (String(r.source || '').startsWith('Apify')) return 'Google Shopping';
+              return r.source || 'Web';
+            };
+            // Relevance filtering REVERTED (Sterling 2026-07-09: long queries lost results —
+            // 'REBUILT Nabco Magnum IV Control' went from many hits to one). Tokens are
+            // still used to pick the hero, but nothing is dropped.
+            const normT = (v) => String(v || '').toUpperCase().replace(/[^A-Z0-9 ]/g, ' ');
+            const qTokens = normT(uQ).split(/\s+/).filter(t => t.length >= 2);
+            const relevant = () => true;
+            // Dedupe: the same listing often arrives once per category export.
+            const seen = new Set();
+            const web = uWeb.filter(relevant).filter(r => {
+              const k = `${sellerOf(r)}|${Number(r.price) || 0}|${normT(r.title)}`;
+              if (seen.has(k)) return false;
+              seen.add(k);
+              return true;
+            });
+            const priced = web.filter(r => Number(r.price) > 0).sort((a, b) => a.price - b.price);
+            const tokenScore = (r) => qTokens.filter(t => normT(r.title).includes(t)).length;
+            const hero = [...web].sort((a, b) => (tokenScore(b) - tokenScore(a)) || ((b.thumbnail ? 1 : 0) - (a.thumbnail ? 1 : 0)))[0] || null;
+            // Prefer the inventory/cost row that actually carries the query in its
+            // part number or name (the first API hit can be a sibling accessory).
+            const norm = (v) => String(v || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+            const nq = norm(uQ);
+            const best = (items, ...fields) =>
+              items.find(it => fields.some(f => norm(it[f]) === nq))
+              || items.find(it => fields.some(f => nq && norm(it[f]).includes(nq)))
+              || items[0] || null;
+            const invHit = best(uInv, 'partNumber', 'name', 'manufacturerPart');
+            const costHit = best(uCost, 'partNumber', 'name', 'manufacturerPart');
+            const marketLow = priced.length ? priced[0].price : null;
+            const marketHigh = priced.length ? priced[priced.length - 1].price : null;
+            const suggested = costHit ? computePricing(costHit.unitCost, pcTargetMargin, marketLow).suggested : null;
+            // Our own listing joins the buying options, ranked by OUR suggested retail.
+            // Semantic hits are RELATED parts (siblings, accessories), not offers for
+            // THE product — they trail the rail under a divider instead of price-ranking
+            // ('Best price \$0.81' for a different part number was nonsense).
+            const isOffer = (r) => r.via !== 'semantic';
+            const offers = priced.filter(isOffer);
+            const related = web.filter(r => !isOffer(r) && r !== hero);
+            const unpriced = web.filter(r => !(Number(r.price) > 0) && r !== hero && isOffer(r));
+            const options = [
+              ...offers.map(r => ({ kind: sellerOf(r).startsWith('Automatics') ? 'ourweb' : 'web', seller: sellerOf(r), price: r.price, title: r.title, note: r.condition && r.condition !== 'unknown' ? r.condition : '', link: r.link, shipping: r.shipping, thumb: r.thumbnail })),
+            ];
+            if (costHit) {
+              options.push({ kind: 'ours', seller: 'Automatics & More', price: suggested, note: invHit ? `${invHit.available} on hand · ${invHit.location || 'our shelf'}` : 'our stock', link: null, cost: costHit.unitCost });
+              options.sort((a, b) => (a.price ?? 1e12) - (b.price ?? 1e12));
+            }
+            // The rail is for COMPARING sellers — our own website listings were drowning
+            // it (Sterling 2026-07-09). Cap rows per seller (1 for our site, 2 for
+            // everyone else); the overflow hides behind a "show more" expander.
+            if (!showAllOffers) {
+              const perSeller = {};
+              const overflow = [];
+              const kept = [];
+              for (const o of options) {
+                const cap = o.kind === 'ourweb' ? 1 : o.kind === 'ours' ? 99 : 2;
+                perSeller[o.seller] = (perSeller[o.seller] || 0) + 1;
+                if (perSeller[o.seller] <= cap) kept.push(o); else overflow.push(o);
+              }
+              if (overflow.length) {
+                options.length = 0;
+                options.push(...kept);
+                options.hiddenCount = overflow.length;
+              }
+            }
+            // Unpriced listings continue DOWN the same list (was a separate "More
+            // options" grid — Sterling 2026-07-09: one list on the right).
+            for (const r of unpriced) {
+              options.push({ kind: 'web', seller: sellerOf(r), price: null, title: r.title, note: 'no price listed', link: r.link, thumb: r.thumbnail });
+            }
+            for (const r of related.slice(0, 10)) {
+              const noPrice = !(Number(r.price) > 0);
+              const isAddison = /addison/i.test(r.source || '');
+              options.push({
+                kind: 'related', seller: r.source,
+                price: noPrice ? null : r.price, title: r.title,
+                note: noPrice && isAddison
+                  ? 'dealer price — log in on their site (or import their price sheet in Price Lists)'
+                  : 'related part — our catalogs',
+                link: r.link, thumb: r.thumbnail,
+              });
+            }
+            const thumbs = web.filter(r => r.thumbnail && r !== hero).slice(0, 4);
+            const more = web.filter(r => r !== hero).slice(0, 8);
+            if (!web.length && !invHit && !costHit) {
+              return <div style={{ textAlign: 'center', color: '#9aa0a6', fontSize: 13, padding: 30 }}>Nothing found — try a different part number or fewer words.</div>;
+            }
+            return (
+              <div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 340px', gap: 18, alignItems: 'start' }}>
+                  {/* LEFT — product hero + embedded supplier browser (fills the blank
+                      space under the hero; rail stays on the right — Sterling 2026-07-09) */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 14, minWidth: 0 }}>
+                  <div style={{ ...styles.card }}>
+                    <div style={{ fontSize: 17, fontWeight: 700, marginBottom: 10 }}>{hero ? hero.title : (invHit ? invHit.name : uQ)}</div>
+                    <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                      {hero && hero.thumbnail ? (
+                        <div>
+                          <img src={hero.thumbnail} alt="" style={{ width: 210, height: 210, objectFit: 'contain', background: '#fafafa', borderRadius: 10, border: '1px solid #eee' }} />
+                          {thumbs.length > 0 && (
+                            <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                              {thumbs.map((t, i) => (
+                                <a key={i} href={t.link} target="_blank" rel="noreferrer">
+                                  <img src={t.thumbnail} alt="" style={{ width: 46, height: 46, objectFit: 'contain', background: '#fafafa', borderRadius: 6, border: '1px solid #eee' }} />
+                                </a>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div style={{ width: 210, height: 210, background: '#fafafa', borderRadius: 10, border: '1px solid #eee', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 40 }}>📦</div>
+                      )}
+                      <div style={{ flex: 1, minWidth: 220 }}>
+                        {[
+                          invHit && ['Part #', invHit.partNumber || invHit.name],
+                          invHit && invHit.manufacturer && ['Manufacturer', invHit.manufacturer],
+                          costHit && ['Our cost', '$' + Number(costHit.unitCost).toFixed(2)],
+                          suggested != null && ['Suggested retail', '$' + Number(suggested).toFixed(2)],
+                          invHit && ['On our shelf', `${invHit.available} available${invHit.location ? ' · ' + invHit.location : ''}`],
+                          hero && hero.condition && hero.condition !== 'unknown' && ['Condition', hero.condition],
+                        ].filter(Boolean).map(([k, v], i) => (
+                          <div key={i} style={{ display: 'flex', gap: 12, padding: '6px 0', borderBottom: '1px solid #f4f4f4', fontSize: 13 }}>
+                            <span style={{ color: '#70757a', width: 120, flexShrink: 0 }}>{k}</span>
+                            <span style={{ fontWeight: 600 }}>{v}</span>
+                          </div>
+                        ))}
+                        {invHit && Number(invHit.available) > 0 && (
+                          <span style={{ display: 'inline-block', marginTop: 10, padding: '3px 10px', borderRadius: 999, background: '#e6f4ea', color: '#137333', fontSize: 12, fontWeight: 700 }}>In stock — our shelf</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {supplierView && (
+                    <div style={{ border: '1px solid #e8eaed', borderRadius: 12, overflow: 'hidden' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: '#f8f9fa', borderBottom: '1px solid #e8eaed' }}>
+                        <span style={{ fontSize: 13, fontWeight: 700 }}>{supplierView.name}</span>
+                        <span style={{ fontSize: 11, color: '#9aa0a6' }}>if this stays blank, the site blocks embedding — use the new-tab button</span>
+                        <span style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+                          <a href={supplierView.url} target="_blank" rel="noreferrer" style={{ fontSize: 12, fontWeight: 700, color: '#1a73e8', textDecoration: 'none' }}>Open in new tab ↗</a>
+                          <button type="button" onClick={() => setSupplierView(null)} style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: 14, color: '#70757a' }}>✕</button>
+                        </span>
+                      </div>
+                      <iframe title={supplierView.name} src={supplierView.url} sandbox="allow-scripts allow-forms allow-popups allow-same-origin" referrerPolicy="no-referrer" style={{ width: '100%', height: '72vh', border: 'none', display: 'block', background: '#fff' }} />
+                    </div>
+                  )}
+                  </div>
+
+                  {/* RIGHT — buying options, cheapest first */}
+                  <div>
+                    {marketLow != null && (
+                      <div style={{ fontSize: 13, color: '#3c4043', marginBottom: 8 }}>
+                        Typically <strong>${marketLow.toFixed(0)}{marketHigh > marketLow ? `–$${marketHigh.toFixed(0)}` : ''}</strong>
+                      </div>
+                    )}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                      <span style={{ fontSize: 15, fontWeight: 700 }}>Buying options</span>
+                      {uWebLoading && (
+                        <span style={{ fontSize: 11, fontWeight: 700, color: '#1a73e8', background: '#e8f0fe', borderRadius: 999, padding: '2px 10px' }}>
+                          searching the web…
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {options.length === 0 && <div style={{ fontSize: 13, color: '#9aa0a6' }}>No priced listings found.</div>}
+                      {options.map((o, i) => {
+                        const firstRelated = o.kind === 'related' && (i === 0 || options[i - 1].kind !== 'related');
+                        const inner = (
+                          <div style={{ display: 'flex', gap: 10, alignItems: 'center', border: '1px solid ' + (o.kind === 'ours' ? '#0f766e' : '#e8eaed'), background: o.kind === 'ours' ? '#f0fdfa' : '#fff', borderRadius: 12, padding: '10px 12px' }}>
+                            {o.thumb && <img src={o.thumb} alt="" style={{ width: 44, height: 44, objectFit: 'contain', background: '#fafafa', borderRadius: 8, flexShrink: 0 }} />}
+                            <div style={{ minWidth: 0, flex: 1 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
+                              <span style={{ fontWeight: 700, fontSize: 13, color: o.kind === 'ours' ? '#0f766e' : '#1a73e8' }}>
+                                {i === 0 && o.kind !== 'related' && o.price != null && <span style={{ background: '#e6f4ea', color: '#137333', borderRadius: 6, padding: '1px 6px', fontSize: 10, fontWeight: 800, marginRight: 6 }}>Best price</span>}
+                                {o.kind === 'ours' && <span style={{ background: '#0f766e', color: '#fff', borderRadius: 6, padding: '1px 6px', fontSize: 10, fontWeight: 800, marginRight: 6 }}>OURS</span>}
+                                {o.kind === 'ourweb' && <span style={{ background: '#134e4a', color: '#fff', borderRadius: 6, padding: '1px 6px', fontSize: 10, fontWeight: 800, marginRight: 6 }}>OUR SITE</span>}
+                                {o.seller}
+                              </span>
+                              <span style={{ fontWeight: 800, fontSize: 15, color: '#137333' }}>{o.price != null ? '$' + Number(o.price).toFixed(2) : '—'}</span>
+                            </div>
+                            {o.title && o.kind !== 'ours' && (
+                              <div style={{ fontSize: 11.5, color: '#3c4043', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o.title}</div>
+                            )}
+                            <div style={{ fontSize: 11.5, color: '#70757a', marginTop: 2 }}>
+                              {o.kind === 'ours' ? `cost $${Number(o.cost).toFixed(2)} · ${o.note}` : [o.note, o.shipping > 0 ? `+$${o.shipping} shipping` : 'shipping varies'].filter(Boolean).join(' · ')}
+                            </div>
+                            </div>
+                          </div>
+                        );
+                        // Clicking a listing opens it in the IN-PAGE browser under the hero —
+                        // EXCEPT sites that block framing (Google/Amazon/eBay/Walmart send
+                        // X-Frame-Options), which would render a blank panel ("it sucks").
+                        // Those open a new tab directly.
+                        const FRAME_BLOCKERS = /google\.|amazon\.|ebay\.|walmart\.|homedepot\.|lowes\./i;
+                        const openListing = () => {
+                          if (FRAME_BLOCKERS.test(o.link)) window.open(o.link, '_blank', 'noopener');
+                          else setSupplierView({ name: o.seller, url: o.link });
+                        };
+                        const card = o.link
+                          ? <div onClick={openListing} style={{ cursor: 'pointer' }} title={FRAME_BLOCKERS.test(o.link) ? 'Opens in a new tab (site blocks embedding)' : 'Opens in the page below'}>{inner}</div>
+                          : inner;
+                        return (
+                          <React.Fragment key={i}>
+                            {firstRelated && <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#9aa0a6', margin: '6px 2px 0' }}>Related parts</div>}
+                            {card}
+                          </React.Fragment>
+                        );
+                      })}
+                      {!showAllOffers && options.hiddenCount > 0 && (
+                        <button type="button" onClick={() => setShowAllOffers(true)}
+                          style={{ cursor: 'pointer', border: '1px dashed #dadce0', background: '#fff', color: '#1a73e8', borderRadius: 12, padding: '8px 12px', fontSize: 12, fontWeight: 700 }}>
+                          Show {options.hiddenCount} more listing{options.hiddenCount === 1 ? '' : 's'}
+                        </button>
+                      )}
+                      {showAllOffers && (
+                        <button type="button" onClick={() => setShowAllOffers(false)}
+                          style={{ cursor: 'pointer', border: 'none', background: 'none', color: '#70757a', fontSize: 12, fontWeight: 700 }}>
+                          Show fewer
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* OUR REGULAR SUPPLIERS — quick jumps for when the rail doesn't settle it,
+                    plus Shortly (Nexus inventory) with the query carried over. */}
+                <div style={{ marginTop: 20 }}>
+                  <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 10 }}>Our regular suppliers</div>
+                  <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                    <a href={(document.referrer ? new URL(document.referrer).origin : 'http://localhost:4800') + '/?open=tools%3Ashortly'} target="_blank" rel="noreferrer"
+                      style={{ textDecoration: 'none', border: '1px solid #0f766e', background: '#f0fdfa', color: '#0f766e', borderRadius: 12, padding: '10px 14px', fontSize: 13, fontWeight: 700 }}>
+                      🔎 Search Shortly (our inventory)
+                    </a>
+                    {distributors.filter(d => d.enabled && d.website).slice(0, 8).map(d => (
+                      <button key={d.id} type="button"
+                        onClick={() => setSupplierView(supplierView && supplierView.url === d.website ? null : { name: d.name, url: d.website })}
+                        style={{ cursor: 'pointer', border: '1px solid ' + (supplierView && supplierView.url === d.website ? '#1a73e8' : '#e8eaed'), background: supplierView && supplierView.url === d.website ? '#e8f0fe' : '#fff', color: '#1a73e8', borderRadius: 12, padding: '10px 14px', fontSize: 13, fontWeight: 700 }}>
+                        {d.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
         </>
       )}
 

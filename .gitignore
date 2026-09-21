@@ -1,8 +1,10 @@
 logs/
 client/dist/
+dist/
 node_modules/
 client/node_modules/
 .env
+client/.env.local
 .DS_Store
 *.save
 qbo-tokens.json
