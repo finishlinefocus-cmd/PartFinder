@@ -2579,6 +2579,25 @@ app.get('/api/search', async (req, res) => {
     else if (r.status === 'rejected') console.error('Search source error:', r.reason?.message || r.reason);
   }
 
+  // Relevance guard: when the query carries a part-number-ish token
+  // (e.g. "stanley 314263"), Google/Apify happily match the brand word alone
+  // and bury the real part under Stanley cups. Web-source results must
+  // mention the part token; catalog/BigQuery rows already matched upstream.
+  const partTokens = (String(q).match(/[A-Za-z0-9-]*\d{4,}[A-Za-z0-9-]*/g) || [])
+    .map((t) => t.toLowerCase().replace(/[^a-z0-9]/g, ''))
+    .filter((t) => t.length >= 4);
+  if (partTokens.length) {
+    const normalize = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const isWebSource = (r) => r.via === 'apify' || r.via === 'serpapi';
+    const mentionsPart = (r) => {
+      const haystack = normalize(`${r.title} ${r.partNumber || ''} ${r.link || ''}`);
+      return partTokens.some((token) => haystack.includes(token));
+    };
+    const guarded = results.filter((r) => !isWebSource(r) || mentionsPart(r));
+    results.length = 0;
+    results.push(...guarded);
+  }
+
   results.sort((a, b) => a.price - b.price);
   const payload = { results, count: results.length, query: q };
   // Only cache a "good" (non-empty) response — never cache an empty result that happened because the
