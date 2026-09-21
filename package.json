@@ -11,7 +11,11 @@
     "launch": "npm run dev:all",
     "autostart:install": "node scripts/autostart.mjs install",
     "autostart:uninstall": "node scripts/autostart.mjs uninstall",
-    "autostart:status": "node scripts/autostart.mjs status"
+    "autostart:status": "node scripts/autostart.mjs status",
+    "prices:normalize": "python3 scripts/price-lists/normalize.py",
+    "prices:import": "node scripts/price-lists/import.mjs",
+    "prices:volusion": "python3 scripts/price-lists/volusion-vendor-rules.py",
+    "prices": "npm run prices:normalize && npm run prices:import && npm run prices:volusion"
   },
   "dependencies": {
     "@google-cloud/bigquery": "^8.1.1",

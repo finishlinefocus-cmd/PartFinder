@@ -1,0 +1,115 @@
+{
+  "generatedAt": "2026-09-21",
+  "vendors": {
+    "bea": {
+      "source": "2026 - BEA (INCLUDES 6% TARIFF)  PRICE LIST.xlsx",
+      "effective": "2026",
+      "cost_basis": "Actual Cost + 6% Tariff",
+      "file": "price-lists/normalized/bea.csv",
+      "parts": 674,
+      "withNet": 684,
+      "withList": 684,
+      "duplicatesDropped": 10
+    },
+    "xcluder": {
+      "source": "2026 - XCLUDER PRICE LIST - (04-13-2026).xlsx",
+      "effective": "2026-04-13",
+      "cost_basis": "Xcluder Cost",
+      "file": "price-lists/normalized/xcluder.csv",
+      "parts": 228,
+      "withNet": 230,
+      "withList": 0,
+      "duplicatesDropped": 2
+    },
+    "horton": {
+      "source": "2026 - HORTON - MARCH - ADVANCED DOOR SERVICES 30% OFF LIST - (05-15-2026).xlsm",
+      "effective": "2026-05-15",
+      "cost_basis": "Our cost (30% off list)",
+      "file": "price-lists/normalized/horton.csv",
+      "parts": 3402,
+      "withNet": 3403,
+      "withList": 3403,
+      "duplicatesDropped": 1
+    },
+    "record-usa": {
+      "source": "RECORD - OUR FINAL COST - Record Parts Price List - 4-1-25 - 35% OFF + 4 (version 1).xlsx",
+      "effective": "2025-04-01",
+      "cost_basis": "Our Cost (35% off + 4)",
+      "file": "price-lists/normalized/record-usa.csv",
+      "parts": 961,
+      "withNet": 961,
+      "withList": 961,
+      "duplicatesDropped": 0
+    },
+    "ready-access": {
+      "source": "2026 - READY ACCESS PRICE LIST.xlsx",
+      "effective": "2026",
+      "cost_basis": "Authorized Agent",
+      "file": "price-lists/normalized/ready-access.csv",
+      "parts": 621,
+      "withNet": 588,
+      "withList": 572,
+      "duplicatesDropped": 0
+    },
+    "optex": {
+      "source": "2026 - OPTEX LEVEL 5 PRICE LIST.xlsx",
+      "effective": "2026-01-02",
+      "cost_basis": "NET (level 5)",
+      "file": "price-lists/normalized/optex.csv",
+      "parts": 129,
+      "withNet": 198,
+      "withList": 198,
+      "duplicatesDropped": 72
+    },
+    "ms-sedco": {
+      "source": "2026 - MS SEDCO PRICE LIST.xlsx",
+      "effective": "2026",
+      "cost_basis": "YOUR PRICE",
+      "file": "price-lists/normalized/ms-sedco.csv",
+      "parts": 193,
+      "withNet": 200,
+      "withList": 199,
+      "duplicatesDropped": 7
+    },
+    "nabco-gyrotech": {
+      "source": "2026 - NABCO PRICE LIST - MAY 19 2026.pdf + decals PDF (OCR)",
+      "effective": "2026-05-19",
+      "cost_basis": "NET PRICE",
+      "warnings": [
+        "25 decal/module parts came from OCR of the image-only decals PDF \u2014 spot-check before quoting"
+      ],
+      "file": "price-lists/normalized/nabco-gyrotech.csv",
+      "parts": 1982,
+      "withNet": 1978,
+      "withList": 1978,
+      "duplicatesDropped": 2
+    },
+    "motion-access": {
+      "source": "2026 - MOTION ACCESS - PRICE LIST -  (05-26-26).pdf",
+      "effective": "2026-05-26",
+      "cost_basis": "Net Price",
+      "warnings": [
+        "Suffix-dependent items carry the LOW end of the vendor's price range; see Notes"
+      ],
+      "file": "price-lists/normalized/motion-access.csv",
+      "parts": 637,
+      "withNet": 706,
+      "withList": 0,
+      "duplicatesDropped": 124
+    },
+    "quad-systems": {
+      "source": "2026 - QUAD SYSTEMS PRICE LIST (QUOTE FORM).pdf",
+      "effective": "2026-01-20",
+      "cost_basis": "Quote unit price",
+      "warnings": [
+        "Derived from a 14-line sales quote, not a full price list"
+      ],
+      "file": "price-lists/normalized/quad-systems.csv",
+      "parts": 13,
+      "withNet": 13,
+      "withList": 0,
+      "duplicatesDropped": 0
+    }
+  },
+  "skipped": {}
+}

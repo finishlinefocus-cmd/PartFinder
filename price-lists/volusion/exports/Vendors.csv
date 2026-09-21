@@ -1,0 +1,90 @@
+vendor_id,vendor_title,vendor_address,vendor_po_sendvia,vendor_po_template,vendor_emailaddress,vendor_email_subject,vendor_faxnumber,vendor_po_shipto,vendor_po_shipvia,vendor_po_terms,vendor_po_duedate,vendor_po_fob,vendor_po_notes,vendor_po_signedby,lastmodified,lastmodby,allows_dropshipping,active,vendor_contacts
+"10","SERVICE SPRING","SERVICE SPRING CORPORATION
+1703 Toll Gate Drive
+Maumee, OH 43537","e-mail","PO_To_Vendor.asp","sales@sscorp.com","PARTS ORDER from Automatics & More Inc.","","","","Net 30","ASAP
+A&M UPS #116AY4","","PLEASE use UPS Acct. #116AY4
+""ALL"" CANADIAN ORDERS Shipped ""UPS Ground"" to CALHOUN, GA. 30701
+""SHIP DOUBLE BLIND""
+For any issues or BO's please contact: CUSTOMER SERVICE (706-625-4255)","DANNY BARTON","2026-07-30 14:13:00","1","Y","Y","Anton Shirley
+D: 330-556-6692
+P: 833-772-3667
+ashirley@sscorp.com"
+"11","AUTOMATICS & MORE","AUTOMATICS & MORE
+210 GOLDEN CIRCLE DRIVE
+CALHOUN, GA. 30701-3948","e-mail","PO_To_Vendor.asp","parts@automaticsandmore.com","PARTS ORDER from AUTOMATICS & MORE","","AUTOMATICS & MORE
+210 GOLDEN CIRCLE DRIVE
+CALHOUN, GA. 30701-3948","UPS","NET 30","ASAP","","","DAN BARTON","2026-06-26 12:20:00","3294","Y","Y","RACHEL COOPER"
+"22","Nabco Entrances Inc.","S82W18717 Gemini Drive
+Muskego, WI 53150","e-mail","PO_To_Vendor.asp","customerservice@nabcoentrances.com","PARTS ORDER from Automatics & More","","","","Net 30","ASAP","","PLEASE use UPS Acct. #116AY4
+BELT is shown by the ""FOOT"".
+""ALL"" CANADIAN ORDERS Shipped ""UPS Ground"" to CALHOUN, GA. 30701
+For any issues or BO's please contact: DAN BARTON (706-625-4255)","DANNY BARTON","2021-11-30 17:20:00","1","Y","Y","Todd Cullen
+877-622-2694 ext. #1"
+"33","BEA Inc.","100 Enterprise Dr.
+Pittsburgh, PA. 15275","e-mail","PO_To_Vendor.asp","orders@beainc.com","PARTS ORDER from AUTOMATICS & MORE","","","","Credit Card","ASAP","","Cust. #017674
+PLEASE use UPS Acct. #116AY4
+""ALL"" CANADIAN ORDERS Shipped UPS GROUND to CALHOUN, GA. 30701
+Charge to Credit Card ending in #1952","DANNY J BARTON","2023-08-24 15:34:00","1","Y","Y","MARIE FUREDY
+Senior Inside Sales - East Region
+412-249-4084
+mfuredy@beainc.com"
+"44","ATEK Access Technologies","210 10th. Avenue NE
+Brainerd, MN 56401
+800-523-6996","e-mail","PO_To_Vendor.asp","cct@larco.com","PARTS ORDER from AUTOMATICS & MORE","","","","Net 30 Days","ASAP","","Cust. #L66800 
+PLEASE use UPS Cust. Acct. #116AY4
+""ALL"" CANADIAN ORDERS Shipped ""UPS Ground"" to CALHOUN, GA. 30701
+Please DO NOT include Automatics & More +/or Dan Barton in ""SHIP TO"" address.
+Dan Barton at 706-625-4255","DANNY J BARTON","2022-05-06 14:24:00","1","Y","Y",""
+"55","ADDISON AUTOMATICS","113 N. 1st St.
+Harmon, IL 61042
+815-359-7306","e-mail","PO_To_Vendor.asp","sales@addisonautomatics.com","PARTS ORDER from AUTOMATICS & MORE","","","","Net 30 Days","A&M FEDEX (#773687994)","","""ALL"" CANADIAN ORDERS Shipped ""UPS Ground"" to CALHOUN, GA. 30701
+""SHIP DOUBLE BLIND""
+""NO PACKING SLIPS""
+""NO RETURN LABELS""
+Please DO NOT include Automatics & More +/or Dan Barton in ""SHIP TO"" address.
+Dan Barton at 706-625-4255","DANNY J BARTON","2026-05-07 11:33:00","3294","Y","Y","Rodney 
+Bob"
+"66","MOTION ACCESS, LLC","775 Nicholas Blvd.
+Elk Grove Village, IL. 60007
+866-357-8832","e-mail","PO_To_Vendor.asp","info@motionaccess.com","PARTS ORDER from AUTOMATICS & MORE","","","","Net 30 Days","ASAP","","""SHIP DOUBLE BLIND""
+""NO PACKING SLIPS""
+""NO RETURN LABELS""
+""ALL"" CANADIAN ORDERS Shipped ""UPS Ground"" to CALHOUN, GA. 30701
+Please DO NOT include Automatics & More +/or Dan Barton in ""SHIP TO"" address.
+Dan Barton at 706-625-4255","DANNY J BARTON","2021-03-22 15:09:00","1","Y","Y","Amber"
+"77","MS SEDCO","5706 W 74th.
+Indianapolis, IN 46278
+317-842-2545","e-mail","PO_To_Vendor.asp","custsvc@mssedco.com","PARTS ORDER from AUTOMATICS & MORE","","","","Net 30","ASAP","","THIRD PARTY COLLECT: UPS Acct. #116AY4
+""SHIP DOUBLE BLIND""
+""ALL"" CANADIAN ORDERS Shipped ""UPS Ground"" to CALHOUN, GA. 30701
+""NO RETURN LABELS""","DANNY BARTON","2024-10-29 09:48:00","1","Y","Y","CALEB HICKS - VP"
+"88","QUIKSERV","11441 Brittmoore Park Drive
+Houston, TX 77041","e-mail","PO_To_Vendor.asp","service@quikserv.com","PARTS ORDER from AUTOMATICS & MORE INC","","","","CREDIT CARD","ASAP","","""SHIP DOUBLE BLIND""
+""NO PACKING SLIPS""
+""NO RETURN LABELS""
+""ALL"" CANADIAN ORDERS Shipped ""UPS Ground"" to CALHOUN, GA. 30701
+Please DO NOT include Automatics & More +/or Dan Barton in ""SHIP TO"" address.
+BLIND/BLIND/BLIND/BLIND!!!
+Use UPS Acct: #116AY4","DANNY J BARTON","2026-07-27 15:44:00","3766","Y","Y","Cyndi Tyson
+800-388-8307
+ctyson@quikserv.com"
+"99","DIRECT HARDWARE","196 Mill Avenue
+Hampshire. IL 60140
+800-449-1462","e-mail","PO_To_Vendor.asp","info@directhardware.com","PARTS ORDER from AUTOMATICS & MORE","","","","Net 30 Days","ASAP","","""ALL"" CANADIAN ORDERS Shipped ""UPS Ground"" to CALHOUN, GA. 30701
+""SHIP DOUBLE BLIND""
+""NO PACKING SLIPS""
+""NO RETURN LABELS""
+Please DO NOT include Automatics & More +/or Dan Barton in ""SHIP TO"" address.
+Dan Barton at 706-625-4255","DANNY J BARTON","2026-02-10 16:17:00","1","Y","Y","Danny DeGott
+Angie Irizarry"
+"100","DOOR CONTROLS USA","321 VZ COUNTY RD. 4500
+BEN WHEELER, TX 75754","e-mail","PO_To_Vendor.asp","parts@doorcontrolsusa.com","PARTS ORDER from AUTOMATICS & MORE INC","","","","Net 30 Days","ASAP","","""SHIP DOUBLE BLIND""
+""NO PACKING SLIPS""
+""NO RETURN LABELS""
+""ALL"" CANADIAN ORDERS Shipped ""UPS Ground"" to CALHOUN, GA. 30701
+Please DO NOT include Automatics & More +/or Dan Barton in ""SHIP TO"" address.
+BLIND/BLIND/BLIND/BLIND!!!
+Use UPS Acct: #116AY4","DANNY J BARTON","2022-12-16 11:16:00","1","Y","Y","Carl H. (Parts Manager)
+Matt Lucas (VP SALES)
+mrlucas@doorcontrols
+800-437-3667"

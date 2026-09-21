@@ -1,0 +1,258 @@
+{
+  "xcluder": {
+    "headerRow": 0,
+    "columns": {
+      "manufacturerPart": "Manufacturer Part",
+      "part": "Part Number",
+      "description": "Description",
+      "price": "List Price",
+      "net": "Net Price",
+      "category": "Category",
+      "uom": "UOM"
+    },
+    "headers": [
+      "Part Number",
+      "Description",
+      "UOM",
+      "List Price",
+      "Net Price",
+      "Category",
+      "Manufacturer Part",
+      "Notes"
+    ],
+    "priceMode": "net",
+    "updatedAt": "2026-09-21T13:14:02.589Z"
+  },
+  "bea": {
+    "headerRow": 0,
+    "columns": {
+      "manufacturerPart": "Manufacturer Part",
+      "part": "Part Number",
+      "description": "Description",
+      "price": "List Price",
+      "net": "Net Price",
+      "category": "Category",
+      "uom": "UOM"
+    },
+    "headers": [
+      "Part Number",
+      "Description",
+      "UOM",
+      "List Price",
+      "Net Price",
+      "Category",
+      "Manufacturer Part",
+      "Notes",
+      "Net Before Tariff"
+    ],
+    "priceMode": "list",
+    "updatedAt": "2026-09-21T13:14:06.604Z"
+  },
+  "horton": {
+    "headerRow": 0,
+    "columns": {
+      "manufacturerPart": "Manufacturer Part",
+      "part": "Part Number",
+      "description": "Description",
+      "price": "List Price",
+      "net": "Net Price",
+      "category": "Category",
+      "uom": "UOM"
+    },
+    "headers": [
+      "Part Number",
+      "Description",
+      "UOM",
+      "List Price",
+      "Net Price",
+      "Category",
+      "Manufacturer Part",
+      "Notes",
+      "A&M Part #"
+    ],
+    "priceMode": "list",
+    "updatedAt": "2026-09-21T13:14:06.662Z"
+  },
+  "record-usa": {
+    "headerRow": 0,
+    "columns": {
+      "manufacturerPart": "Manufacturer Part",
+      "part": "Part Number",
+      "description": "Description",
+      "price": "List Price",
+      "net": "Net Price",
+      "category": "Category",
+      "uom": "UOM",
+      "link": "Best Source"
+    },
+    "headers": [
+      "Part Number",
+      "Description",
+      "UOM",
+      "List Price",
+      "Net Price",
+      "Category",
+      "Manufacturer Part",
+      "Notes",
+      "Addison Price",
+      "Door Controls Price",
+      "Best Source"
+    ],
+    "priceMode": "list",
+    "updatedAt": "2026-09-21T13:14:06.710Z"
+  },
+  "ready-access": {
+    "headerRow": 0,
+    "columns": {
+      "manufacturerPart": "Manufacturer Part",
+      "part": "Part Number",
+      "description": "Description",
+      "price": "List Price",
+      "net": "Net Price",
+      "category": "Category",
+      "link": "Link",
+      "uom": "UOM"
+    },
+    "headers": [
+      "Part Number",
+      "Description",
+      "UOM",
+      "List Price",
+      "Net Price",
+      "Category",
+      "Manufacturer Part",
+      "Notes",
+      "Used On",
+      "Suggested Resale",
+      "Link"
+    ],
+    "priceMode": "list",
+    "updatedAt": "2026-09-21T13:14:06.761Z"
+  },
+  "optex": {
+    "headerRow": 0,
+    "columns": {
+      "manufacturerPart": "Manufacturer Part",
+      "part": "Part Number",
+      "description": "Description",
+      "price": "List Price",
+      "net": "Net Price",
+      "category": "Category",
+      "uom": "UOM"
+    },
+    "headers": [
+      "Part Number",
+      "Description",
+      "UOM",
+      "List Price",
+      "Net Price",
+      "Category",
+      "Manufacturer Part",
+      "Notes",
+      "Model",
+      "Product Family",
+      "Division"
+    ],
+    "priceMode": "list",
+    "updatedAt": "2026-09-21T13:14:06.810Z"
+  },
+  "ms-sedco": {
+    "headerRow": 0,
+    "columns": {
+      "manufacturerPart": "Manufacturer Part",
+      "part": "Part Number",
+      "description": "Description",
+      "price": "List Price",
+      "net": "Net Price",
+      "category": "Category",
+      "uom": "UOM"
+    },
+    "headers": [
+      "Part Number",
+      "Description",
+      "UOM",
+      "List Price",
+      "Net Price",
+      "Category",
+      "Manufacturer Part",
+      "Notes"
+    ],
+    "priceMode": "list",
+    "updatedAt": "2026-09-21T13:14:06.860Z"
+  },
+  "nabco-gyrotech": {
+    "headerRow": 0,
+    "columns": {
+      "manufacturerPart": "Manufacturer Part",
+      "part": "Part Number",
+      "description": "Description",
+      "price": "List Price",
+      "net": "Net Price",
+      "category": "Category",
+      "uom": "UOM"
+    },
+    "headers": [
+      "Part Number",
+      "Description",
+      "UOM",
+      "List Price",
+      "Net Price",
+      "Category",
+      "Manufacturer Part",
+      "Notes",
+      "Old Part #"
+    ],
+    "priceMode": "list",
+    "updatedAt": "2026-09-21T13:37:11.156Z"
+  },
+  "motion-access": {
+    "headerRow": 0,
+    "columns": {
+      "manufacturerPart": "Manufacturer Part",
+      "part": "Part Number",
+      "description": "Description",
+      "price": "List Price",
+      "net": "Net Price",
+      "category": "Category",
+      "uom": "UOM"
+    },
+    "headers": [
+      "Part Number",
+      "Description",
+      "UOM",
+      "List Price",
+      "Net Price",
+      "Category",
+      "Manufacturer Part",
+      "Notes",
+      "Catalog Page"
+    ],
+    "priceMode": "net",
+    "updatedAt": "2026-09-21T13:14:06.988Z"
+  },
+  "quad-systems": {
+    "headerRow": 0,
+    "columns": {
+      "manufacturerPart": "Manufacturer Part",
+      "part": "Part Number",
+      "description": "Description",
+      "price": "List Price",
+      "net": "Net Price",
+      "category": "Category",
+      "uom": "UOM"
+    },
+    "headers": [
+      "Part Number",
+      "Description",
+      "UOM",
+      "List Price",
+      "Net Price",
+      "Category",
+      "Manufacturer Part",
+      "Notes",
+      "OEM"
+    ],
+    "priceMode": "net",
+    "updatedAt": "2026-09-21T13:14:07.049Z"
+  }
+}

@@ -313,7 +313,11 @@ A first-generation price-list importer now ships (`POST /api/distributors/:id/im
 - **Non-destructive change detection:** on re-import, counts added / price-up / price-down / unchanged / discontinued, reports biggest movers, and surfaces new/removed columns plus format-drift warnings. Unknown columns are captured into `item.extra` so data is never dropped. Parts absent from a full re-import are flagged `available: false`; a partial-upload coverage guard prevents mass false "discontinued" when only part of a list is uploaded.
 - **Preserves history:** per-part `priceHistory[]` (capped 24) and a per-vendor + global change feed (`distributorChangeLog.json`, exposed at `GET /api/distributors/:id/changes`, `GET /api/changes`, and `GET /api/availability`).
 
-Validated against five real vendor files (Direct Hardware, Door Controls, SDC, BEA 2026 6%-tariff, Sortly export). Still to do: original-file archival with a stored mapping/version record, a formal staff-review gate before publishing large imports, and separating offers out of flat catalog rows.
+Validated against five real vendor files (Direct Hardware, Door Controls, SDC, BEA 2026 6%-tariff, Sortly export).
+
+**Batch pipeline (Sept 2026):** `price-lists/` archives every vendor file as received; `npm run prices` runs `scripts/price-lists/normalize.py` (per-vendor xlsx/xlsm/PDF parsers → one uniform CSV each, cost basis recorded in `manifest.json`), `import.mjs` (pushes each CSV through the import endpoint above) and `volusion-vendor-rules.py` (refreshes the storefront's Volusion Vendor_Rules prices and lists new-rule candidates). Ten vendors are wired: BEA, Xcluder, Horton (via ADS), Record, Ready Access, OPTEX, MS Sedco, NABCO (main list + OCR'd decals pages via `ocr-pdf.swift` / macOS Vision), Motion Access, Quad Systems. See `price-lists/README.md`.
+
+Still to do: a formal staff-review gate before publishing large imports, and separating offers out of flat catalog rows.
 
 ## Best-Buy Recommendation
 

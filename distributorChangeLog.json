@@ -1,0 +1,1580 @@
+{
+  "xcluder": [
+    {
+      "at": "2026-09-21T13:14:02.567Z",
+      "distributor": "Xcluder",
+      "headerRow": 1,
+      "priceMode": "net",
+      "partialUpload": false,
+      "coverage": 1,
+      "counts": {
+        "added": 228,
+        "updated": 0,
+        "priceUp": 0,
+        "priceDown": 0,
+        "unchanged": 0,
+        "discontinued": 0
+      },
+      "newColumns": [],
+      "removedColumns": [],
+      "formatWarnings": [],
+      "topMovers": [],
+      "addedSample": [
+        {
+          "part": "162460",
+          "description": "Floor Expansion Joint Kit",
+          "price": 20.7
+        },
+        {
+          "part": "162706",
+          "description": "Fill Fabric Roll, 4\" x 10' (10.16cm x 3.04m)",
+          "price": 23.3
+        },
+        {
+          "part": "162707",
+          "description": "Fill Fabric Case, 4\" x 10' (10.16cm x 3.04m), 5 ",
+          "price": 116.3
+        },
+        {
+          "part": "162715",
+          "description": "Blocks Case, 2\" x 2\" x 7.5\" (5.08cm x 5.08cm x 1",
+          "price": 319.05
+        },
+        {
+          "part": "162720",
+          "description": "Fabric Strips Case, 1\" x 4' (2.54cm x 1.22m), 36",
+          "price": 121.7
+        },
+        {
+          "part": "162731",
+          "description": "Fill Fabric Starter Kit (gloves and scissors inc",
+          "price": 29.8
+        },
+        {
+          "part": "162800",
+          "description": "Wrap, Adhesive Back, 2\" x 10' (5.08cm x 3.04m), ",
+          "price": 56.95
+        },
+        {
+          "part": "162801",
+          "description": "Wrap, Adhesive Back, 4\" x 10' (10.16cm x 3.04m),",
+          "price": 45.2
+        },
+        {
+          "part": "162758A",
+          "description": "Fill Fabric Large DIY Kit 4\" x 5'",
+          "price": 19.55
+        },
+        {
+          "part": "162758FIT",
+          "description": "Fill Fabric Large DIY Kit w/FIT 4\" x 5'",
+          "price": 22.3
+        },
+        {
+          "part": "162423",
+          "description": "Bug Barrier 1\" x 4'",
+          "price": 7.55
+        },
+        {
+          "part": "162743",
+          "description": "3-Roll Box 4\" x 5' roll (3)",
+          "price": 68.8
+        },
+        {
+          "part": "162746",
+          "description": "6-Roll Box 4\" x 5' roll (6)",
+          "price": 114.65
+        },
+        {
+          "part": "162854",
+          "description": "Fill Fabric Roll 2\" x 50'",
+          "price": 78.75
+        },
+        {
+          "part": "162480-40",
+          "description": "WeepFill (3\" x 4\" sections) (40 pcs)",
+          "price": 29.4
+        },
+        {
+          "part": "162480-200",
+          "description": "WeepFill (3\" x 4\" sections) (200 pcs)",
+          "price": 147
+        },
+        {
+          "part": "XCL-12101036-AL",
+          "description": "Low-Profile Door Sweep, 36\" (.91m), Anodized Alu",
+          "price": 31.05
+        },
+        {
+          "part": "XCL-12101036-BR",
+          "description": "Low-Profile Door Sweep, 36\" (.91m), Anodized Bro",
+          "price": 31.05
+        },
+        {
+          "part": "XCL-12102036-AL",
+          "description": "Low-Profile Door Sweep, 36\" (.91m), Anodized Alu",
+          "price": 55.85
+        },
+        {
+          "part": "XCL-12102036-BR",
+          "description": "Low-Profile Door Sweep, 36\" (.91m), Anodized Bro",
+          "price": 55.85
+        },
+        {
+          "part": "XCL-12101045-AL",
+          "description": "Low-Profile Door Sweep, 45\" (1.14m), Anodized Al",
+          "price": 33.1
+        },
+        {
+          "part": "XCL-12101045-BR",
+          "description": "Low-Profile Door Sweep, 45\" (1.14m)), Anodized B",
+          "price": 33.1
+        },
+        {
+          "part": "XCL-12102045-AL",
+          "description": "Low-Profile Door Sweep, 45\" (1.14m), Anodized Al",
+          "price": 62.85
+        },
+        {
+          "part": "XCL-12102045-BR",
+          "description": "Low-Profile Door Sweep, 45\" (1.14m), Anodized Br",
+          "price": 62.85
+        },
+        {
+          "part": "XCL-12101048-AL",
+          "description": "Low-Profile Door Sweep, 48\" (1.22m), Anodized Al",
+          "price": 35.45
+        }
+      ],
+      "discontinuedSample": []
+    }
+  ],
+  "bea": [
+    {
+      "at": "2026-09-21T13:14:06.583Z",
+      "distributor": "BEA Americas",
+      "headerRow": 1,
+      "priceMode": "list",
+      "partialUpload": true,
+      "coverage": 0,
+      "counts": {
+        "added": 674,
+        "updated": 0,
+        "priceUp": 0,
+        "priceDown": 0,
+        "unchanged": 0,
+        "discontinued": 0
+      },
+      "newColumns": [],
+      "removedColumns": [],
+      "formatWarnings": [],
+      "topMovers": [],
+      "addedSample": [
+        {
+          "part": "10.1279",
+          "description": "VIDIO / Camera Cover ONLY for IXIO with PS Cable",
+          "price": 634.83
+        },
+        {
+          "part": "10.1311",
+          "description": "ADAPTER BRACKET KIT, LZRWIDESCAN - TURNKEY",
+          "price": 26.97
+        },
+        {
+          "part": "1012VAC",
+          "description": "Transformer,12 Volt AC",
+          "price": 26.97
+        },
+        {
+          "part": "1024VAC",
+          "description": "Transformer,24 Volt AC,with Mounting Feet, 40va ",
+          "price": 26.97
+        },
+        {
+          "part": "10ACP12",
+          "description": "Access Control Package 1 (10ACP12)",
+          "price": 768.54
+        },
+        {
+          "part": "10ACP12DS",
+          "description": "Access Control Package 5 (10ACP12DS)",
+          "price": 793.26
+        },
+        {
+          "part": "10ACP12F",
+          "description": "Access Control Package 2 (10ACP12F)",
+          "price": 768.54
+        },
+        {
+          "part": "10ACP12FDS",
+          "description": "Access Control Package 6 (10ACP12FDS)",
+          "price": 767.42
+        },
+        {
+          "part": "10ACP6",
+          "description": "Access Control Package 3 (10ACP6)",
+          "price": 743.82
+        },
+        {
+          "part": "10ACP6DS",
+          "description": "Access Control Package 7 (10ACP6DS)",
+          "price": 793.26
+        },
+        {
+          "part": "10ACP6F",
+          "description": "Access Control Package 4 (10ACP6F)",
+          "price": 743.82
+        },
+        {
+          "part": "10ACP6FDS",
+          "description": "Access Control Package 8 (10ACP6FDS)",
+          "price": 767.42
+        },
+        {
+          "part": "10ACPBDA1",
+          "description": "10ACPBDA1 -- Switch, Delayed Action RED PTE 2\" J",
+          "price": 489.89
+        },
+        {
+          "part": "10ACPBDA10",
+          "description": "10ACPBDA10 -- Switch, Delayed Action GREEN PTE 2",
+          "price": 494.38
+        },
+        {
+          "part": "10ACPBDA11",
+          "description": "10ACPBDA11 -- Switch, Delayed Action GREEN PTE 1",
+          "price": 489.89
+        },
+        {
+          "part": "10ACPBDA12",
+          "description": "10ACPBDA12 -- Switch, Delayed Action GREEN PTE 1",
+          "price": 494.38
+        },
+        {
+          "part": "10ACPBDA2",
+          "description": "Switch, Delayed Action RED PTE 2\" SINGLE GANG",
+          "price": 494.38
+        },
+        {
+          "part": "10ACPBDA3",
+          "description": "10ACPBDA3 -- Switch, Delayed Action RED PTE 1 5/",
+          "price": 489.89
+        },
+        {
+          "part": "10ACPBDA4",
+          "description": "10ACPBDA4 -- Switch, Delayed Action RED PTE 1 5/",
+          "price": 494.38
+        },
+        {
+          "part": "10ACPBDA5",
+          "description": "10ACPBDA5 -- Switch, Delayed Action BLUE HC 2\" J",
+          "price": 489.89
+        },
+        {
+          "part": "10ACPBDA6",
+          "description": "Switch, Delayed Action BLUE HC 2\" SINGLE GANG",
+          "price": 494.38
+        },
+        {
+          "part": "10ACPBDA7",
+          "description": "10ACPBDA7 -- Switch, Delayed Action BLUE HC 1 5/",
+          "price": 489.89
+        },
+        {
+          "part": "10ACPBDA8",
+          "description": "Switch, Delayed Action BLUE HC 1 5/8\" SINGLE GAN",
+          "price": 494.38
+        },
+        {
+          "part": "10ACPBDA9",
+          "description": "10ACPBDA9 -- Switch, Delayed Action GREEN PTE 2\"",
+          "price": 489.89
+        },
+        {
+          "part": "10ACPBSS1",
+          "description": "10ACPBSS1... ACCESS CONTROL",
+          "price": 70.79
+        }
+      ],
+      "discontinuedSample": []
+    }
+  ],
+  "horton": [
+    {
+      "at": "2026-09-21T13:14:06.632Z",
+      "distributor": "Horton Automatics",
+      "headerRow": 1,
+      "priceMode": "list",
+      "partialUpload": true,
+      "coverage": 0,
+      "counts": {
+        "added": 3402,
+        "updated": 0,
+        "priceUp": 0,
+        "priceDown": 0,
+        "unchanged": 0,
+        "discontinued": 0
+      },
+      "newColumns": [],
+      "removedColumns": [],
+      "formatWarnings": [],
+      "topMovers": [],
+      "addedSample": [
+        {
+          "part": "C00004.0000",
+          "description": "PISTON ROD",
+          "price": 271
+        },
+        {
+          "part": "C00006.0000",
+          "description": "GLAZING NOTICE",
+          "price": 3.3
+        },
+        {
+          "part": "C00007.0000",
+          "description": "O RING 622722 .217",
+          "price": 9.6
+        },
+        {
+          "part": "C00007.000L",
+          "description": "O RING IND 622729",
+          "price": 11.2
+        },
+        {
+          "part": "C00008.0000",
+          "description": "NUT 1/4-20 THIN FLEXLK",
+          "price": 4.8
+        },
+        {
+          "part": "C00010.0000",
+          "description": "O RING 622705",
+          "price": 6.3
+        },
+        {
+          "part": "C00010.000L",
+          "description": "O RING IND 622707",
+          "price": 11.2
+        },
+        {
+          "part": "C00017.0000",
+          "description": "BRACKET ADAPTER",
+          "price": 38.1
+        },
+        {
+          "part": "C00018.0000",
+          "description": "ACCY BAG S4000 SL LOOSE OPER",
+          "price": 14.2
+        },
+        {
+          "part": "C00021.0000",
+          "description": "NUT; 1/4-20; SERRATED FLANGE GRADE 5",
+          "price": 0.4
+        },
+        {
+          "part": "C00030.0000",
+          "description": "MICROSW BZ 2RW80-A2",
+          "price": 74.8
+        },
+        {
+          "part": "C00033.0000",
+          "description": "SOLENOID 24VAC W/BLACK LEADS PARKER # 71315SN1KV",
+          "price": 459
+        },
+        {
+          "part": "C00035.0000",
+          "description": "O RING 622701",
+          "price": 4.8
+        },
+        {
+          "part": "C00041.000R",
+          "description": "VALVE BLOCK",
+          "price": 137
+        },
+        {
+          "part": "C00042.0001",
+          "description": "SPEED ADJ SCREW ASSY",
+          "price": 15.3
+        },
+        {
+          "part": "C00043.0000",
+          "description": "VALVE ACTUATOR ROD",
+          "price": 79.1
+        },
+        {
+          "part": "C00048.0000",
+          "description": "DIODE 3.0A 1000V FAIRCHILD 1N5408",
+          "price": 7.9
+        },
+        {
+          "part": "C00049.0001",
+          "description": "LACE TOGL PNEU SLID ASSY",
+          "price": 124
+        },
+        {
+          "part": "C00054.000R",
+          "description": "TOG SW 11TS115-2 / 7546K38",
+          "price": 53.8
+        },
+        {
+          "part": "C00060.0000",
+          "description": "NUT WIRE NUT YELLOW",
+          "price": 1.7
+        },
+        {
+          "part": "C00061.0000",
+          "description": "TRANSFRMR W/GROUND WIR ASSY",
+          "price": 438
+        },
+        {
+          "part": "C00062.0000",
+          "description": "BOLT 10X1/2 FHSMS 23PS",
+          "price": 1.7
+        },
+        {
+          "part": "C00070.0000",
+          "description": "SCREW 4-40X1/2 BHMS",
+          "price": 1.7
+        },
+        {
+          "part": "C00071.0001",
+          "description": "NUT; #4-40 KEPS",
+          "price": 1.7
+        },
+        {
+          "part": "C00080.0000",
+          "description": "NUT 10-24 THIN FLEX LK",
+          "price": 1.7
+        }
+      ],
+      "discontinuedSample": []
+    }
+  ],
+  "record-usa": [
+    {
+      "at": "2026-09-21T13:14:06.684Z",
+      "distributor": "Record USA",
+      "headerRow": 1,
+      "priceMode": "list",
+      "partialUpload": false,
+      "coverage": 0,
+      "counts": {
+        "added": 961,
+        "updated": 0,
+        "priceUp": 0,
+        "priceDown": 0,
+        "unchanged": 0,
+        "discontinued": 0
+      },
+      "newColumns": [],
+      "removedColumns": [],
+      "formatWarnings": [],
+      "topMovers": [],
+      "addedSample": [
+        {
+          "part": "102-019808221",
+          "description": "Transformer, 115V, Sliding, System 20",
+          "price": 337
+        },
+        {
+          "part": "102-020808406",
+          "description": "CABLE, CANBUS, 8'2\" (2500mm) RIC290",
+          "price": 79
+        },
+        {
+          "part": "102-020808415",
+          "description": "Electric Lock, VRR 20 Motorized",
+          "price": 651
+        },
+        {
+          "part": "102-020808482",
+          "description": "Module, Expansion (FEM0)",
+          "price": 1228
+        },
+        {
+          "part": "102-020808513",
+          "description": "Mounting Set, VRR Lock Microswitch&Hardware",
+          "price": 166
+        },
+        {
+          "part": "102-020808757",
+          "description": "Manual Unlock Handle, VRR 20 Emergency Exit",
+          "price": 354
+        },
+        {
+          "part": "102-020808805",
+          "description": "Harness, Encoder 1750mm",
+          "price": 99
+        },
+        {
+          "part": "102-032136",
+          "description": "Wire Rope, 1.5mm",
+          "price": 7
+        },
+        {
+          "part": "102-032167",
+          "description": "Cable Sheath, 8mm VRR 20 Lock",
+          "price": 3
+        },
+        {
+          "part": "102-126049",
+          "description": "Push Arm Extension, 345mm, CL (S8100/S6100 Opera",
+          "price": 35
+        },
+        {
+          "part": "102-126051",
+          "description": "Push Arm Extension, 230mm, CL (S8100/S6100 Opera",
+          "price": 35
+        },
+        {
+          "part": "102-126521",
+          "description": "Push Arm Extension, 230mm, DB (S8100/S6100 Opera",
+          "price": 35
+        },
+        {
+          "part": "102-126527",
+          "description": "Push Arm Extension, 345mm, DB (S8100/S6100 Opera",
+          "price": 35
+        },
+        {
+          "part": "102-127812723",
+          "description": "Battery Pack DFA 127 In 6\" Casing(header assy.)",
+          "price": 1424
+        },
+        {
+          "part": "102-127812724",
+          "description": "Kit Battery Pack DFA 127",
+          "price": 789
+        },
+        {
+          "part": "102-127816013",
+          "description": "Adaptor, Drive Arm, 20mm, CL (S8100/S6100 Operat",
+          "price": 167
+        },
+        {
+          "part": "102-127816014",
+          "description": "Adaptor, Drive Arm, 35mm, CL (S8100/S6100 Operat",
+          "price": 176
+        },
+        {
+          "part": "102-127816016",
+          "description": "Adaptor, Drive Arm, 50mm, CL (S8100/S6100 Operat",
+          "price": 167
+        },
+        {
+          "part": "102-127816017",
+          "description": "Adaptor, Drive Arm, 80mm, CL (S8100/S6100 Operat",
+          "price": 173
+        },
+        {
+          "part": "102-127816028",
+          "description": "Arm Assembly, Slide, Clear",
+          "price": 1090
+        },
+        {
+          "part": "102-127816078",
+          "description": "Arm Assembly, Offset Slide, LH, Clear",
+          "price": 1090
+        },
+        {
+          "part": "102-127816079",
+          "description": "Arm Assembly, Offset Slide, RH, Clear",
+          "price": 1090
+        },
+        {
+          "part": "102-127816085",
+          "description": "Adaptor, Drive Arm, 20mm, DB (S8100/S6100 Operat",
+          "price": 214
+        },
+        {
+          "part": "102-127816086",
+          "description": "Adaptor, Drive Arm, 35mm, DB (S8100/S6100 Operat",
+          "price": 214
+        },
+        {
+          "part": "102-127816087",
+          "description": "Adaptor, Drive Arm, 50mm, DB (S8100/S6100 Operat",
+          "price": 214
+        }
+      ],
+      "discontinuedSample": []
+    }
+  ],
+  "ready-access": [
+    {
+      "at": "2026-09-21T13:14:06.733Z",
+      "distributor": "Ready Access",
+      "headerRow": 1,
+      "priceMode": "list",
+      "partialUpload": false,
+      "coverage": 1,
+      "counts": {
+        "added": 621,
+        "updated": 0,
+        "priceUp": 0,
+        "priceDown": 0,
+        "unchanged": 0,
+        "discontinued": 0
+      },
+      "newColumns": [],
+      "removedColumns": [],
+      "formatWarnings": [],
+      "topMovers": [],
+      "addedSample": [
+        {
+          "part": "20240016",
+          "description": "\"S\" Hook",
+          "price": 0.4
+        },
+        {
+          "part": "40010023",
+          "description": "Bumper W/Washer Gry",
+          "price": 0.5
+        },
+        {
+          "part": "20112141",
+          "description": "Cable - Auto Latch (Solenoid)",
+          "price": 6.6
+        },
+        {
+          "part": "20112148",
+          "description": "Cable - Beam Box (cut connecter for Super Scan)",
+          "price": 24
+        },
+        {
+          "part": "20112143",
+          "description": "Cable - Eye (Waist High)",
+          "price": 20
+        },
+        {
+          "part": "20112147",
+          "description": "Cable - Micro Switch Wiring Harness",
+          "price": 23.7
+        },
+        {
+          "part": "20112144",
+          "description": "Cable - Motor",
+          "price": 5
+        },
+        {
+          "part": "20112142",
+          "description": "Cable - Power",
+          "price": 40
+        },
+        {
+          "part": "85153600",
+          "description": "Cable & Chain Assy BO-10, 131",
+          "price": 70
+        },
+        {
+          "part": "95150900",
+          "description": "Cable Clamp -( Order 1 screw 10010026)",
+          "price": 3.2
+        },
+        {
+          "part": "95151001",
+          "description": "Cable Clamp Bracket (Manual and Electric) order ",
+          "price": 8
+        },
+        {
+          "part": "85163200",
+          "description": "Clutch Assy 131M (Manual Arbor) ***NO MORE IN ST",
+          "price": 139
+        },
+        {
+          "part": "85152700",
+          "description": "Clutch Assy BO-10, 131 ***NO MORE***",
+          "price": null
+        },
+        {
+          "part": "65152201",
+          "description": "Cover - Motor- Brz",
+          "price": 32
+        },
+        {
+          "part": "85005100",
+          "description": "Cover BEA Sensor ***NO MORE***",
+          "price": null
+        },
+        {
+          "part": "85002001",
+          "description": "DC3 - Universal Control Board",
+          "price": 475
+        },
+        {
+          "part": "85183601",
+          "description": "Door 131-6-E Left - Bronze",
+          "price": 404
+        },
+        {
+          "part": "85183603",
+          "description": "Door 131-6-E Left - Clear",
+          "price": 404
+        },
+        {
+          "part": "85183602",
+          "description": "Door 131-6-E Right - Bronze",
+          "price": 404
+        },
+        {
+          "part": "85183604",
+          "description": "Door 131-6-E Right - Clear",
+          "price": 404
+        },
+        {
+          "part": "85183501",
+          "description": "Door 131-E Left - Bronze",
+          "price": 379
+        },
+        {
+          "part": "85183301",
+          "description": "Door 131-E Left - Clear",
+          "price": 379
+        },
+        {
+          "part": "85183502",
+          "description": "Door 131E Right - Bronze",
+          "price": 379
+        },
+        {
+          "part": "85183302",
+          "description": "Door 131-E Right - Clear",
+          "price": 379
+        },
+        {
+          "part": "85183304",
+          "description": "Door 131-E Right - Pow",
+          "price": 540
+        }
+      ],
+      "discontinuedSample": []
+    }
+  ],
+  "optex": [
+    {
+      "at": "2026-09-21T13:14:06.786Z",
+      "distributor": "OPTEX",
+      "headerRow": 1,
+      "priceMode": "list",
+      "partialUpload": false,
+      "coverage": 0,
+      "counts": {
+        "added": 129,
+        "updated": 0,
+        "priceUp": 0,
+        "priceDown": 0,
+        "unchanged": 0,
+        "discontinued": 0
+      },
+      "newColumns": [],
+      "removedColumns": [],
+      "formatWarnings": [],
+      "topMovers": [],
+      "addedSample": [
+        {
+          "part": "A10031104",
+          "description": "OA-FLEX-T — AIR Motion/Presence Sensor with BLUE",
+          "price": 640
+        },
+        {
+          "part": "C16000086",
+          "description": "OA FLEX MOUNT — Mounting Kit for OA-Flex T",
+          "price": 95
+        },
+        {
+          "part": "A10031577",
+          "description": "OA-EDGE1 T(34.5)B — DM Swing Safety Sensor 34.5\"",
+          "price": 547
+        },
+        {
+          "part": "A10031579",
+          "description": "OA-EDGE2 T(34.5)B — DM Swing Safety Sensor 34.5\"",
+          "price": 862
+        },
+        {
+          "part": "A10031578",
+          "description": "OA-EDGE1 T(44)B — DM Swing Safety Sensor 44\" & 1",
+          "price": 616
+        },
+        {
+          "part": "A10031580",
+          "description": "OA-EDGE2 T(40)B — DM Swing Safety Sensor 40\" & 1",
+          "price": 898
+        },
+        {
+          "part": "A10031581",
+          "description": "OA-EDGE2 T(44)B — DM Swing Safety Sensor 44\" & 1",
+          "price": 933
+        },
+        {
+          "part": "A10030860",
+          "description": "OA-EDGE_LED — EDGE LED Module",
+          "price": 102
+        },
+        {
+          "part": "A10030899",
+          "description": "PROFILE 1600 BL — EDGE Profile 1600 BL",
+          "price": 295
+        },
+        {
+          "part": "A10088724",
+          "description": "ED_CAB_COM_10 — OA-EDGE 10\" Black Communication ",
+          "price": 103
+        },
+        {
+          "part": "A10088725",
+          "description": "ED_CAB_COM_35 — OA-EDGE 35\" Black Communication ",
+          "price": 66
+        },
+        {
+          "part": "A10088870",
+          "description": "ED_PRT_WIN_44IN — OA-EDGE Window 44 inch",
+          "price": 116
+        },
+        {
+          "part": "A10088742",
+          "description": "EDT_CAB_PWR — OA-EDGE T Power Cable",
+          "price": 119
+        },
+        {
+          "part": "A10088737",
+          "description": "RH-E 1200 — Rain Hood For OA-EDGE Series (1200 m",
+          "price": 127
+        },
+        {
+          "part": "A10031584",
+          "description": "OA-EDGE T Primary Module — OA-EDGE T Primary mod",
+          "price": 451
+        },
+        {
+          "part": "A10031585",
+          "description": "OA-EDGE T Secondary Module — OA-EDGE T Secondary",
+          "price": 440
+        },
+        {
+          "part": "C16000069",
+          "description": "ED_PRT_CAP_KIT — EDGE End Cap Kit",
+          "price": 9
+        },
+        {
+          "part": "A10088750",
+          "description": "ED_CLIPS — Edge Clips",
+          "price": 44
+        },
+        {
+          "part": "A10031089",
+          "description": "Pro-Swing Premier T — HM Swing Safety Sensor + C",
+          "price": 561
+        },
+        {
+          "part": "C16000036",
+          "description": "Premier Mount — Proswing Premier mounting bracke",
+          "price": 55
+        },
+        {
+          "part": "A10088603",
+          "description": "PR_CAB_COM_40\" — Premier Mk1& Mk2 40\" Black Cabl",
+          "price": 124
+        },
+        {
+          "part": "A10031081",
+          "description": "Pro-Swing Elite T — DM Swing Safety Sensor + Con",
+          "price": 1292
+        },
+        {
+          "part": "A10031082",
+          "description": "EL_SH_603 T — ELITE Sensor head OA-603 T (Self m",
+          "price": 746
+        },
+        {
+          "part": "A10031083",
+          "description": "EL_COT_904 T — ELITE Controller OC-904C T (Self ",
+          "price": 380
+        },
+        {
+          "part": "A10030636",
+          "description": "OMS-102 — ELITE Position Sensor (New Version)",
+          "price": 561
+        }
+      ],
+      "discontinuedSample": []
+    }
+  ],
+  "ms-sedco": [
+    {
+      "at": "2026-09-21T13:14:06.835Z",
+      "distributor": "MS Sedco",
+      "headerRow": 1,
+      "priceMode": "list",
+      "partialUpload": false,
+      "coverage": 1,
+      "counts": {
+        "added": 193,
+        "updated": 0,
+        "priceUp": 0,
+        "priceDown": 0,
+        "unchanged": 0,
+        "discontinued": 0
+      },
+      "newColumns": [],
+      "removedColumns": [],
+      "formatWarnings": [],
+      "topMovers": [],
+      "addedSample": [
+        {
+          "part": "49-H",
+          "description": "Blue Face Plate WHEELCHAIR/PRESS TO OPERATE DOOR",
+          "price": 80
+        },
+        {
+          "part": "49-HSS",
+          "description": "Stainless Steel Face Plate WHEELCHAIR/PRESS TO O",
+          "price": 80
+        },
+        {
+          "part": "49-P",
+          "description": "Stainless Steel Face Plate PRESS TO OPERATE DOOR",
+          "price": 80
+        },
+        {
+          "part": "49-W",
+          "description": "Blue Face Plate WHEELCHAIR",
+          "price": 80
+        },
+        {
+          "part": "49-WSS",
+          "description": "Stainless Steel Face Plate WHEELCHAIR",
+          "price": 80
+        },
+        {
+          "part": "49-PLAIN",
+          "description": "Stainless Steel Face Plate NO LEGEND",
+          "price": 80
+        },
+        {
+          "part": "-NY",
+          "description": "Add New York style handicap logo to any switch s",
+          "price": 80
+        },
+        {
+          "part": "59-H",
+          "description": "Blue Face Plate WHEELCHAIR/PRESS TO OPERATE DOOR",
+          "price": 80
+        },
+        {
+          "part": "59-HSS",
+          "description": "Stainless Steel Face Plate WHEELCHAIR/PRESS TO O",
+          "price": 80
+        },
+        {
+          "part": "59-P",
+          "description": "Stainless Steel Face Plate PRESS TO OPERATE DOOR",
+          "price": 80
+        },
+        {
+          "part": "59-W",
+          "description": "Blue Face Plate WHEELCHAIR",
+          "price": 80
+        },
+        {
+          "part": "59-WSS",
+          "description": "Stainless Steel Face Plate WHEELCHAIR",
+          "price": 80
+        },
+        {
+          "part": "59-PLAIN",
+          "description": "Stainless Steel Face Plate NO LEGEND",
+          "price": 80
+        },
+        {
+          "part": "59R4-H",
+          "description": "Blue Face Plate WHEELCHAIR/PRESS TO OPERATE DOOR",
+          "price": 80
+        },
+        {
+          "part": "59R4-HSS",
+          "description": "Stainless Steel Face Plate WHEELCHAIR/PRESS TO O",
+          "price": 80
+        },
+        {
+          "part": "59R4-P",
+          "description": "Stainless Steel Face Plate PRESS TO OPERATE DOOR",
+          "price": 80
+        },
+        {
+          "part": "59R4-W",
+          "description": "Blue Face Plate WHEELCHAIR",
+          "price": 80
+        },
+        {
+          "part": "59R4-WSS",
+          "description": "Stainless Steel Face Plate WHEELCHAIR",
+          "price": 80
+        },
+        {
+          "part": "59R4-PLAIN",
+          "description": "Stainless Steel Face Plate NO LEGEND",
+          "price": 80
+        },
+        {
+          "part": "59R6-H",
+          "description": "Blue Face Plate WHEELCHAIR/PRESS TO OPERATE DOOR",
+          "price": 89
+        },
+        {
+          "part": "59R6-HSS",
+          "description": "Stainless Steel Face Plate WHEELCHAIR/PRESS TO O",
+          "price": 89
+        },
+        {
+          "part": "59R6-P",
+          "description": "Stainless Steel Face Plate PRESS TO OPERATE DOOR",
+          "price": 89
+        },
+        {
+          "part": "59R6-W",
+          "description": "Blue Face Plate WHEELCHAIR",
+          "price": 89
+        },
+        {
+          "part": "59R6-WSS",
+          "description": "Stainless Steel Face Plate WHEELCHAIR",
+          "price": 89
+        },
+        {
+          "part": "59R6-PLAIN",
+          "description": "Stainless Steel Face Plate NO LEGEND",
+          "price": 89
+        }
+      ],
+      "discontinuedSample": []
+    }
+  ],
+  "nabco-gyrotech": [
+    {
+      "at": "2026-09-21T13:37:11.117Z",
+      "distributor": "NABCO / Gyro Tech",
+      "headerRow": 1,
+      "priceMode": "list",
+      "partialUpload": false,
+      "coverage": 1,
+      "counts": {
+        "added": 23,
+        "updated": 1959,
+        "priceUp": 0,
+        "priceDown": 0,
+        "unchanged": 1959,
+        "discontinued": 0
+      },
+      "newColumns": [],
+      "removedColumns": [],
+      "formatWarnings": [],
+      "topMovers": [],
+      "addedSample": [
+        {
+          "part": "V-00526",
+          "description": "Noise Filter for 120 VAC Power Circuit helps to ",
+          "price": null
+        },
+        {
+          "part": "A-01043",
+          "description": "Card Reader Harness Assy. inables activation of ",
+          "price": null
+        },
+        {
+          "part": "C-00073",
+          "description": "Decal, Front side - \"Do not Enter\", back side - ",
+          "price": 6.7
+        },
+        {
+          "part": "C-00072",
+          "description": "Decal, Front side - Arrow, back side - \"Do not E",
+          "price": 6.7
+        },
+        {
+          "part": "C-00146",
+          "description": "Decal, Front side - Arrow, back side - white bar",
+          "price": 18
+        },
+        {
+          "part": "C-00079",
+          "description": "Decal, Front side - white bar on red background,",
+          "price": 18
+        },
+        {
+          "part": "C-00075",
+          "description": "Two sided decal with wording on both sides. Diam",
+          "price": 6.7
+        },
+        {
+          "part": "14-9842",
+          "description": "Decal, Handicap Logo, Round, Double Sided",
+          "price": null
+        },
+        {
+          "part": "C-00137",
+          "description": "Decal, Handicap Logo, Square, Double Sided",
+          "price": 6
+        },
+        {
+          "part": "14-8701",
+          "description": "Decal, \"AUTOMATIC DOOR\". \"PUSH DOOR TO OPERATE\",",
+          "price": null
+        },
+        {
+          "part": "C-00081",
+          "description": "Decal, Combination \"CAUTION AUTOMATIC DOOR/ACTIV",
+          "price": 9.7
+        },
+        {
+          "part": "C-00148",
+          "description": "Decal, \"PUSH TO OPERATE\", Single Sided",
+          "price": 12.6
+        },
+        {
+          "part": "C-00149",
+          "description": "Decal, \"PULL TO OPERATE\", Single Sided",
+          "price": 12.6
+        },
+        {
+          "part": "C-00064",
+          "description": "Decal, Swing Door Safety Information Sticker",
+          "price": 7.6
+        },
+        {
+          "part": "C-00065",
+          "description": "Decal, Sliding Door Safety Information Sticker",
+          "price": 7.6
+        },
+        {
+          "part": "C-00158",
+          "description": "Decal, Folding Door Safety Information Sticker",
+          "price": 7.6
+        },
+        {
+          "part": "C-00080",
+          "description": "Decal, Low Energy Swing Door Safety Information ",
+          "price": 7.6
+        },
+        {
+          "part": "C-00078",
+          "description": "Decal, \"AUTOMATIC SLIDING DOOR\", Two sided with ",
+          "price": 10.6
+        },
+        {
+          "part": "C-00190",
+          "description": "Decal, Two sided, International Overall size = 3",
+          "price": 6.2
+        },
+        {
+          "part": "C-00076",
+          "description": "Decal, \"IN EMERGENCY PUSH TO OPEN\", One sided, O",
+          "price": 6.7
+        },
+        {
+          "part": "C-00077",
+          "description": "Decal, \"CAUTION STAND CLEAR\", One sided, Overall",
+          "price": 6.7
+        },
+        {
+          "part": "C-00118",
+          "description": "Decal, \"CAUTION STAND CLEAR\", Two sided with wor",
+          "price": 51
+        },
+        {
+          "part": "C-00191",
+          "description": "Template,Jamb Drilling, One Sided For mounting G",
+          "price": null
+        }
+      ],
+      "discontinuedSample": []
+    },
+    {
+      "at": "2026-09-21T13:14:06.887Z",
+      "distributor": "NABCO / Gyro Tech",
+      "headerRow": 1,
+      "priceMode": "list",
+      "partialUpload": false,
+      "coverage": 0,
+      "counts": {
+        "added": 1959,
+        "updated": 0,
+        "priceUp": 0,
+        "priceDown": 0,
+        "unchanged": 0,
+        "discontinued": 0
+      },
+      "newColumns": [],
+      "removedColumns": [],
+      "formatWarnings": [],
+      "topMovers": [],
+      "addedSample": [
+        {
+          "part": "A-00002",
+          "description": "ELECTRIC LOCK,FAIL SAFE,GT1100",
+          "price": 1582
+        },
+        {
+          "part": "A-00003",
+          "description": "SWITCH, PROXIMITY",
+          "price": 115
+        },
+        {
+          "part": "A-00008",
+          "description": "OPERATOR,PIN,MODIFIED",
+          "price": 48
+        },
+        {
+          "part": "A-00012",
+          "description": "BLOCK,PILLOW,MACHINED,MILL",
+          "price": 41
+        },
+        {
+          "part": "A-00021",
+          "description": "BRACKET,COME ALONG;MILL,MACHINED",
+          "price": 36
+        },
+        {
+          "part": "A-00029",
+          "description": "ASM, TOP PIVOT, 1175 SWING PANEL",
+          "price": 123
+        },
+        {
+          "part": "A-00032",
+          "description": "ASM,PIVOT,ALL GLASS-OBS 4 US SERVIC ONLY",
+          "price": 643
+        },
+        {
+          "part": "A-00042",
+          "description": "ASM, IDLER PULLEY",
+          "price": 113
+        },
+        {
+          "part": "A-00057",
+          "description": "BALL DETENT,ASSEMBLY",
+          "price": 75
+        },
+        {
+          "part": "A-00060",
+          "description": "LIMIT ARM,SWING PANEL,ASM,NARROW STILE",
+          "price": 75
+        },
+        {
+          "part": "A-00062",
+          "description": "ASM,ROLLER,GUIDE",
+          "price": 46
+        },
+        {
+          "part": "A-00069",
+          "description": "PANIC CATCH ASM,BOTTOM HALF,.090 WALL",
+          "price": 96
+        },
+        {
+          "part": "A-00071",
+          "description": "PANIC CATCH, UPPER,ASM.",
+          "price": 49
+        },
+        {
+          "part": "A-00078",
+          "description": "BELT,DRIVE,IDLER SPROCKET,TENSIONER",
+          "price": 50
+        },
+        {
+          "part": "A-00080",
+          "description": "BRACKET,RECESSED HANDLE MOUNT",
+          "price": 63
+        },
+        {
+          "part": "A-00087",
+          "description": "BUMPER,DOOR STOP",
+          "price": 37
+        },
+        {
+          "part": "A-00092",
+          "description": "ASM,CARRIER BAR,NARROW STILE",
+          "price": 99
+        },
+        {
+          "part": "A-00128",
+          "description": "DOOR STOP,ASM.",
+          "price": 69
+        },
+        {
+          "part": "A-00129",
+          "description": "ASM,AMPLIFIER,PHOTOEYE",
+          "price": 176
+        },
+        {
+          "part": "A-00143",
+          "description": "REED SWITCH ASSEMBLY WIDE GAP",
+          "price": 43
+        },
+        {
+          "part": "A-00144",
+          "description": "ASM,REED SWITCH,N.O.,STD GAP,15\" LEADS",
+          "price": 43
+        },
+        {
+          "part": "A-00149",
+          "description": "ASM,MAGNET,BREAKOUT",
+          "price": 55
+        },
+        {
+          "part": "A-00162",
+          "description": "ROLLER, HANGER, ASSEMBLY, 1175",
+          "price": 65
+        },
+        {
+          "part": "A-00163",
+          "description": "AXLE ASSEMBLY-ANTI RISE ROLLER",
+          "price": 96
+        },
+        {
+          "part": "A-00165",
+          "description": "ASM,CARRIER BAR,MEDIUM STILE",
+          "price": 91
+        }
+      ],
+      "discontinuedSample": []
+    }
+  ],
+  "motion-access": [
+    {
+      "at": "2026-09-21T13:14:06.953Z",
+      "distributor": "Motion Access, LLC",
+      "headerRow": 1,
+      "priceMode": "net",
+      "partialUpload": false,
+      "coverage": 1,
+      "counts": {
+        "added": 637,
+        "updated": 0,
+        "priceUp": 0,
+        "priceDown": 0,
+        "unchanged": 0,
+        "discontinued": 0
+      },
+      "newColumns": [],
+      "removedColumns": [],
+      "formatWarnings": [],
+      "topMovers": [],
+      "addedSample": [
+        {
+          "part": "MA50200-*",
+          "description": "Condor 2 Slide Control with Smart/Adaptor Harnes",
+          "price": 502
+        },
+        {
+          "part": "MA50200",
+          "description": "Condor 2 Slide Control",
+          "price": 487
+        },
+        {
+          "part": "MA50200-C*",
+          "description": "Condor 2 Slide Control & Motor/Gearbox",
+          "price": 948
+        },
+        {
+          "part": "MA50200-C*E",
+          "description": "Condor 2 Slide Control & MGB w/ FailSafe Electri",
+          "price": 1233
+        },
+        {
+          "part": "MA50200-C*U",
+          "description": "Condor 2 Slide Control & MGB w/ FailSecure Elect",
+          "price": 1233
+        },
+        {
+          "part": "MA50100-M*",
+          "description": "Condor Slide Motor/Gearbox",
+          "price": 502
+        },
+        {
+          "part": "MA50100-M*E",
+          "description": "Condor Slide MGB w/ FailSafe Electric Lock",
+          "price": 789
+        },
+        {
+          "part": "MA50100-M*U",
+          "description": "Condor Slide MGB w/ FailSecure Electric Lock",
+          "price": 789
+        },
+        {
+          "part": "MA96991-900",
+          "description": "Replacement Motor/Gearbox, Dor-O-Matic/LCN Astro",
+          "price": 502
+        },
+        {
+          "part": "MA5600-1",
+          "description": "Replacement Motor/Gearbox, Horton 2003 Belt Slid",
+          "price": 502
+        },
+        {
+          "part": "MA418054",
+          "description": "Replacement Motor/Gearbox, GyroTech 1100 Slider,",
+          "price": 502
+        },
+        {
+          "part": "MA219528",
+          "description": "Replacement Motor/Gearbox, GyroTech 1175 Slider,",
+          "price": 502
+        },
+        {
+          "part": "MA313443",
+          "description": "Replacement Motor/Gearbox, Stanley DuraGlide, Wo",
+          "price": 502
+        },
+        {
+          "part": "MAC- (single*)",
+          "description": "Condor Swing Operator - Single (* see catalog fo",
+          "price": 1398
+        },
+        {
+          "part": "MAC- (pair*)",
+          "description": "Condor Swing Operator Pair (* see catalog for su",
+          "price": 2612
+        },
+        {
+          "part": "option <R>",
+          "description": "Optional 3 Postion Rocker Switch (ref: MA40011)",
+          "price": 44
+        },
+        {
+          "part": "option <K>",
+          "description": "Optional 3 Postion Key Switch (ref: MA40111)",
+          "price": 58
+        },
+        {
+          "part": "option <T>",
+          "description": "Optional 2 Postion Rocker Switch (ref: MA20011)",
+          "price": 44
+        },
+        {
+          "part": "option <E>",
+          "description": "Optional Push Arm Extension (ref: MA-EXT-KIT)",
+          "price": 15.4
+        },
+        {
+          "part": "option <B>",
+          "description": "Optional Breakaway Switch (ref: MA-STOPS-BA)",
+          "price": 34.5
+        },
+        {
+          "part": "option <F>",
+          "description": "Optional Fixed Stop (ref: MA-STOPS-FX)",
+          "price": 19.9
+        },
+        {
+          "part": "option <X>",
+          "description": "Optional Extended Single (over 4 ft)",
+          "price": 57
+        },
+        {
+          "part": "option <N>",
+          "description": "Optional Independent Pair (ref: MA50777T & MA-GN",
+          "price": 531.5
+        },
+        {
+          "part": "option <1>",
+          "description": "Optional Right Hand Double Egress Pair",
+          "price": 0
+        },
+        {
+          "part": "option <2>",
+          "description": "Optional Left Hand Double Egress Pair",
+          "price": 0
+        }
+      ],
+      "discontinuedSample": []
+    }
+  ],
+  "quad-systems": [
+    {
+      "at": "2026-09-21T13:14:07.019Z",
+      "distributor": "Quad Systems LLC",
+      "headerRow": 1,
+      "priceMode": "net",
+      "partialUpload": false,
+      "coverage": 1,
+      "counts": {
+        "added": 13,
+        "updated": 0,
+        "priceUp": 0,
+        "priceDown": 0,
+        "unchanged": 0,
+        "discontinued": 0
+      },
+      "newColumns": [],
+      "removedColumns": [],
+      "formatWarnings": [],
+      "topMovers": [],
+      "addedSample": [
+        {
+          "part": "A113-0102-00",
+          "description": "DC4000 POWER CLOSE CHIP",
+          "price": 74.75
+        },
+        {
+          "part": "A113-0103-00",
+          "description": "DC7000 POWER CLOSE CHIP",
+          "price": 74.75
+        },
+        {
+          "part": "C4252-14A",
+          "description": "OUTSWING ARM, WASHER, SCREW, 14T CL",
+          "price": 207.74
+        },
+        {
+          "part": "C5254-1",
+          "description": "CONNECTING ROD, WITH ROD, SHOES, HARDWARE",
+          "price": 242.94
+        },
+        {
+          "part": "DC7000-LO",
+          "description": "DC7000 LH OUT OPERATOR W/SHORT MOUNTING PLATE",
+          "price": 459.37
+        },
+        {
+          "part": "DC7000-RO",
+          "description": "DC7000 RH OUT OPERATOR W/SHORT MOUNTING PLATE",
+          "price": 459.37
+        },
+        {
+          "part": "DC7000-1A-39.5",
+          "description": "DC7000 RH PUSH SINGLE CL, 39.5\" Header",
+          "price": 842.81
+        },
+        {
+          "part": "DC7000-2A-39.5",
+          "description": "DC7000 LH PUSH SINGLE CL, 39.5\" Header",
+          "price": 842.81
+        },
+        {
+          "part": "DC7000-C",
+          "description": "DC7000 CONTROL EPROM 113-0102-01",
+          "price": 402
+        },
+        {
+          "part": "DC4000-LHO",
+          "description": "DC4000 OPERATOR, LHO",
+          "price": 665.98
+        },
+        {
+          "part": "DC4000-RHO",
+          "description": "DC4000 OPERATOR, RHO",
+          "price": 665.98
+        },
+        {
+          "part": "DC4000-1A-39.5",
+          "description": "DC4000 RH PUSH SINGLE CL, 39.5\" HEADER",
+          "price": 1102.14
+        },
+        {
+          "part": "DC4000-2A-39.5",
+          "description": "DC4000 LH PUSH SINGLE CL, 39.5\" HEADER",
+          "price": 1102.14
+        }
+      ],
+      "discontinuedSample": []
+    }
+  ]
+}
