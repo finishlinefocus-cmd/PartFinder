@@ -359,7 +359,11 @@ def parse_nabco():
         rows.append(row(new, body, unit_map.get(uom, uom), money(lst), money(net), "", "", "", **{"Old Part #": old}))
     meta = {"source": os.path.basename(path), "effective": "2026-05-19", "cost_basis": "NET PRICE",
             "warnings": [f"{len(warn)} priced lines did not parse: " + " | ".join(warn[:5])] if warn else []}
-    decals = parse_nabco_decals()
+    try:
+        decals = parse_nabco_decals()
+    except Exception as e:  # OCR needs macOS (swift + Vision); on Windows/Linux just skip the decal pages
+        decals = []
+        meta["warnings"].append(f"decals PDF skipped — OCR unavailable on this machine ({type(e).__name__}); run on a Mac to include them")
     if decals:
         rows += decals
         meta["source"] += " + decals PDF (OCR)"
