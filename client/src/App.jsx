@@ -121,6 +121,23 @@ export default function App() {
     loadCatalog();
   }, []);
 
+  // Opened from Nexus Search's PartFinder tab as /pf/?q=<part> (Sterling 2026-10-13: "just go to
+  // partfinder on that tab"): land on Price Search with that part already searched. Nexus only adds ?q=
+  // when the person presses Enter / Search — the web sources behind this are paid per query.
+  useEffect(() => {
+    let q = '';
+    try { q = (new URLSearchParams(window.location.search).get('q') || '').trim(); } catch { /* no query */ }
+    if (!q) return;
+    setActiveTab('search');
+    setQuery(q);
+    setLoading(true); setError(''); setSearched(true);
+    fetch(API + '/search?q=' + encodeURIComponent(q) + '&condition=Any')
+      .then(res => res.json())
+      .then(data => setResults(data.results || []))
+      .catch(err => { setError('Search failed: ' + err.message); setResults([]); })
+      .finally(() => setLoading(false));
+  }, []);
+
   // Load the change feed + availability whenever the Changes & Alerts tab is opened
   // (and after an import, which bumps the catalog through loadCatalog/selectVendor).
   useEffect(() => {
