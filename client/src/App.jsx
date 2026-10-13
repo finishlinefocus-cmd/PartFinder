@@ -1,6 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import * as XLSX from 'xlsx';
 
+// API calls follow the page's base: '/api' when Vite serves the client on its own (dev), '/pf/api' when
+// Nexus serves the built client at /pf/ and proxies that prefix to this API (2026-10-13).
+const API = (import.meta.env.BASE_URL || '/').replace(/\/$/, '') + '/api';
+
 // Catalog category names follow a "<COMPANY> <TYPE>" pattern (e.g. "BESAM CONTROLS",
 // "DORMA PARTS", "HORTON OPER/MTR", "STANLEY NEW"). Split a category into the company
 // it belongs to and the part-type sub-category so the tree can nest one under the other.
@@ -128,9 +132,9 @@ export default function App() {
     setHomeLoading(true);
     try {
       const [invRes, costRes, availRes] = await Promise.all([
-        fetch('/api/inventory'),
-        fetch('/api/cost'),
-        fetch('/api/availability'),
+        fetch(API + '/inventory'),
+        fetch(API + '/cost'),
+        fetch(API + '/availability'),
       ]);
       const inv = await invRes.json();
       const cost = await costRes.json();
@@ -155,8 +159,8 @@ export default function App() {
     setAlertsError('');
     try {
       const [chRes, avRes] = await Promise.all([
-        fetch('/api/changes'),
-        fetch('/api/availability'),
+        fetch(API + '/changes'),
+        fetch(API + '/availability'),
       ]);
       const chData = await chRes.json();
       const avData = await avRes.json();
@@ -169,7 +173,7 @@ export default function App() {
   }
 
   async function loadDistributors() {
-    const res = await fetch('/api/distributors');
+    const res = await fetch(API + '/distributors');
     const data = await res.json();
     setDistributors(data.distributors || []);
   }
@@ -178,7 +182,7 @@ export default function App() {
     setCatalogLoading(true);
     setCatalogError('');
     try {
-      const res = await fetch('/api/distributor-catalog?q=' + encodeURIComponent(q));
+      const res = await fetch(API + '/distributor-catalog?q=' + encodeURIComponent(q));
       const data = await res.json();
       setCatalogItems(data.items || []);
       setCatalogUpdatedAt(data.updatedAt || null);
@@ -192,7 +196,7 @@ export default function App() {
     setRefreshingDistributor(id);
     setCatalogError('');
     try {
-      const res = await fetch('/api/distributors/' + encodeURIComponent(id) + '/refresh', {
+      const res = await fetch(API + '/distributors/' + encodeURIComponent(id) + '/refresh', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
@@ -253,7 +257,7 @@ export default function App() {
       // Re-import with the corrected column mapping / headline-price choice for this vendor.
       if (opts.overrides) body.overrides = opts.overrides;
       if (opts.priceMode) body.priceMode = opts.priceMode;
-      const res = await fetch('/api/distributors/' + encodeURIComponent(importTarget) + '/import', {
+      const res = await fetch(API + '/distributors/' + encodeURIComponent(importTarget) + '/import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -276,7 +280,7 @@ export default function App() {
     setRefreshingAutomaticsMore(true);
     setCatalogError('');
     try {
-      const res = await fetch('/api/distributors/refresh-automatics-and-more', {
+      const res = await fetch(API + '/distributors/refresh-automatics-and-more', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
@@ -298,7 +302,7 @@ export default function App() {
     setRefreshingConnected(true);
     setCatalogError('');
     try {
-      const res = await fetch('/api/distributors/refresh-connected', {
+      const res = await fetch(API + '/distributors/refresh-connected', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
@@ -327,7 +331,7 @@ export default function App() {
     setSearched(true);
     const q = [manufacturer, query, partNumber].filter(Boolean).join(' ');
     try {
-      const res = await fetch('/api/search?q=' + encodeURIComponent(q) + '&condition=' + condition);
+      const res = await fetch(API + '/search?q=' + encodeURIComponent(q) + '&condition=' + condition);
       const data = await res.json();
       setResults(data.results || []);
     } catch (err) {
@@ -348,7 +352,7 @@ export default function App() {
     setInvError('');
     setInvSearched(true);
     try {
-      const res = await fetch('/api/inventory?q=' + encodeURIComponent(q));
+      const res = await fetch(API + '/inventory?q=' + encodeURIComponent(q));
       const data = await res.json();
       setInvResults(data.items || []);
     } catch (err) {
@@ -371,7 +375,7 @@ export default function App() {
     setPcSelected(null);
     setPcRetailOverride('');
     try {
-      const res = await fetch('/api/cost?q=' + encodeURIComponent(q));
+      const res = await fetch(API + '/cost?q=' + encodeURIComponent(q));
       const data = await res.json();
       const items = data.items || [];
       setPcCostItems(items);
