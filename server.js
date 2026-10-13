@@ -2234,12 +2234,40 @@ function searchMockCosts(query) {
 }
 
 // --- Source 2: vendor net price from imported price lists ---
-function searchCatalogNetCosts(query) {
+//
+// COST LOOKUP RULES (pricing audit, Sterling 2026-10-13: "make the fixes"). The lookup used to return a part
+// if ANY word of the query appeared in it, so "Besam SW200" returned every Besam part and every SW200 part,
+// and a bare number matched inside longer numbers (1003532 found the REBUILT 1003532R). Now:
+//   1. a part number is matched EXACTLY against the row's own number and every manufacturer number the
+//      vendor lists for it ("1007241BK,1007241SI" is two numbers) — new and rebuilt stay apart;
+//   2. only when no number matches, EVERY word must appear (description search);
+//   3. a net of $10,000+ is not a cost: Addison lists obsolete parts at do-not-sell figures ("BESAM AMD
+//      MOTOR OBSOLETE" $43,200, list $108,000) and those must never feed the Pricing Engine.
+const PLACEHOLDER_NET = 10000;
+const normPart = (s) => String(s || '').trim().toUpperCase();
+// Only a piece with a digit in it is a part number: Addison's manufacturer field sometimes holds a
+// description ("BESAM/ASSA PULL ARM SLIDE BLOCK…"), and "BESAM" must not count as a part number.
+const isPartNo = (t) => /\d/.test(t);
+const partNumbersOf = (r) => [r.addisonPart, ...String(r.manufacturerPart || '').split(/[,/\s]+/)].map(normPart).filter((t) => t && isPartNo(t));
+// A word with a digit in it is a part number: it matches only as a whole number ("1003532" never
+// matches inside "1003532R"); plain words match anywhere ("besam" in "BESAM").
+const escRe = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const matchesAllTokens = (haystackParts, tokens) => {
+  const hay = haystackParts.filter(Boolean).join(' ').toLowerCase();
+  return tokens.every((t) => (/\d/.test(t) ? new RegExp(`(^|[^a-z0-9])${escRe(t)}([^a-z0-9]|$)`).test(hay) : hay.includes(t)));
+};
+function rankForCost(rows, query, fieldsOf) {
   const tokens = tokenize(query);
+  if (!tokens.length) return rows;
+  const want = new Set([normPart(query), ...tokens.map(normPart)].filter(isPartNo));
+  const exact = rows.filter((r) => partNumbersOf(r).some((n) => want.has(n)));
+  if (exact.length) return exact;
+  return rows.filter((r) => matchesAllTokens(fieldsOf(r), tokens));
+}
+function searchCatalogNetCosts(query) {
   const { items } = readCatalogStore();
-  const withNet = items.filter((r) => r.netPrice != null && !Number.isNaN(Number(r.netPrice)));
-  const matched = !tokens.length ? withNet
-    : withNet.filter((r) => matchesTokens([r.description, r.addisonPart, r.manufacturerPart, r.distributor, r.category], tokens));
+  const withNet = items.filter((r) => r.netPrice != null && !Number.isNaN(Number(r.netPrice)) && Number(r.netPrice) < PLACEHOLDER_NET);
+  const matched = rankForCost(withNet, query, (r) => [r.description, r.addisonPart, r.manufacturerPart, r.distributor, r.category]);
   return matched.map((r) => ({
     qboItemId: 'cat-' + r.id,
     name: r.description || r.addisonPart || r.manufacturerPart || 'Part',
@@ -2331,7 +2359,9 @@ async function searchCosts(query) {
   }
   const net = searchCatalogNetCosts(query);
   if (net.length) return { source: 'vendor-net', items: net };
-  return { source: 'mock', items: searchMockCosts(query) };
+  // No sample-data fallback any more: a made-up cost reads exactly like a real one on the Pricing
+  // Engine screen. "No cost on file" is the honest answer (pricing audit 2026-10-13).
+  return { source: 'none', items: [] };
 }
 
 app.get('/api/cost', async (req, res) => {

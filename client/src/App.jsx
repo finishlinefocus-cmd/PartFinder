@@ -813,7 +813,7 @@ export default function App() {
           <div style={styles.card}>
             <div style={{ fontSize: 18, fontWeight: 600, marginBottom: 4 }}>💰 Pricing Engine</div>
             <div style={{ color: '#666', fontSize: 13, marginBottom: 14 }}>
-              Pull our cost (QuickBooks, sample data for now), set against the market price, and get a competitive retail with the margin spelled out.
+              Pull our cost (the vendor's signed-in net price — Addison, Service Spring, CRL), set against the market price, and get a competitive retail with the margin spelled out.
             </div>
             <form onSubmit={runCostLookup}>
               <label style={styles.label}>Part name, number, or manufacturer</label>
@@ -846,7 +846,7 @@ export default function App() {
           {pcError && <div style={styles.error}>{pcError}</div>}
 
           {pcSearched && !pcLoading && pcCostItems.length === 0 && !pcError && (
-            <div style={styles.empty}>No cost on file for that part in QuickBooks (sample data).</div>
+            <div style={styles.empty}>No vendor cost on file for that part — it is not on a signed-in price list (Addison, Service Spring, CRL).</div>
           )}
 
           {pcCostItems.length > 1 && (
