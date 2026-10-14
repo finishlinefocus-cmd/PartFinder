@@ -4,6 +4,8 @@ import * as XLSX from 'xlsx';
 // API calls follow the page's base: '/api' when Vite serves the client on its own (dev), '/pf/api' when
 // Nexus serves the built client at /pf/ and proxies that prefix to this API (2026-10-13).
 const API = (import.meta.env.BASE_URL || '/').replace(/\/$/, '') + '/api';
+import CompareRail from './CompareRail.jsx';
+import RefineBar, { MatchChip } from './RefineBar.jsx';
 
 // Catalog category names follow a "<COMPANY> <TYPE>" pattern (e.g. "BESAM CONTROLS",
 // "DORMA PARTS", "HORTON OPER/MTR", "STANLEY NEW"). Split a category into the company
@@ -66,6 +68,11 @@ export default function App() {
   const [error, setError] = useState('');
   const [searched, setSearched] = useState(false);
   const [sortBy, setSortBy] = useState('price');
+  // Compare rail: a seller key (lower-cased source) narrows the list, null shows everyone.
+  const [sellerFilter, setSellerFilter] = useState(null);
+  // Refine with Claude: hidden until /api/refine/status says a key is set.
+  const [refineStatus, setRefineStatus] = useState({ enabled: false, model: '' });
+  const [refine, setRefine] = useState({ result: null, byId: {}, error: '', showUnrelated: false });
   const [distributors, setDistributors] = useState([]);
   const [distributorSearch, setDistributorSearch] = useState('');
   const [catalogItems, setCatalogItems] = useState([]);
@@ -142,6 +149,11 @@ export default function App() {
   // (and after an import, which bumps the catalog through loadCatalog/selectVendor).
   useEffect(() => {
     if (activeTab === 'changes') loadAlerts();
+    if (activeTab === 'search' && !refineStatus.checked) {
+      fetch(API + '/refine/status').then(r => r.json())
+        .then(d => setRefineStatus({ ...d, checked: true }))
+        .catch(() => setRefineStatus({ enabled: false, model: '', checked: true }));
+    }
     if (activeTab === 'home') loadHomeSummary();
   }, [activeTab]);
 
@@ -337,16 +349,21 @@ export default function App() {
     setRefreshingConnected(false);
   }
 
-  async function runSearch(e) {
-    if (e) e.preventDefault();
-    if (!query && !partNumber) {
+  // `override` is a whole query string (a suggested search from the refine step): it replaces the
+  // three boxes so what is on screen matches what was searched.
+  async function runSearch(e, override) {
+    if (e && e.preventDefault) e.preventDefault();
+    const q = override != null ? String(override).trim() : [manufacturer, query, partNumber].filter(Boolean).join(' ');
+    if (override != null) { setQuery(q); setPartNumber(''); setManufacturer(''); }
+    if (!q) {
       setError('Enter a part name or number to search.');
       return;
     }
     setLoading(true);
     setError('');
     setSearched(true);
-    const q = [manufacturer, query, partNumber].filter(Boolean).join(' ');
+    setSellerFilter(null);
+    setRefine({ result: null, byId: {}, error: '', showUnrelated: false });
     try {
       const res = await fetch(API + '/search?q=' + encodeURIComponent(q) + '&condition=' + condition);
       const data = await res.json();
@@ -468,7 +485,8 @@ export default function App() {
   };
 
   function sortedResults() {
-    const copy = [...results];
+    let copy = [...results];
+    if (sellerFilter) copy = copy.filter(r => String(r.source || 'Unknown').trim().toLowerCase() === sellerFilter);
     if (sortBy === 'price') return copy.sort((a, b) => a.price - b.price);
     if (sortBy === 'total') return copy.sort((a, b) => (a.price + a.shipping) - (b.price + b.shipping));
     if (sortBy === 'source') return copy.sort((a, b) => a.source.localeCompare(b.source));
@@ -979,29 +997,86 @@ export default function App() {
 
           {results.length > 0 && (
             <>
-              <div style={styles.sortBar}>
-                <span style={{ fontSize: 12, color: '#666' }}>{results.length} results — Sort:</span>
+              <div style={{ ...styles.sortBar, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 12, color: '#666' }}>
+                  {sellerFilter ? `${sortedResults().length} of ${results.length}` : results.length} results — Sort:
+                </span>
                 <button style={sortBtnStyle(sortBy === 'price')} onClick={() => setSortBy('price')}>Price</button>
                 <button style={sortBtnStyle(sortBy === 'total')} onClick={() => setSortBy('total')}>Total w/ shipping</button>
                 <button style={sortBtnStyle(sortBy === 'source')} onClick={() => setSortBy('source')}>Source</button>
+                {sellerFilter && (
+                  <button style={{ ...sortBtnStyle(true), background: '#FFF4D6', color: '#8A5A00', borderColor: '#f0d9a0' }} onClick={() => setSellerFilter(null)} title="Show every seller again">
+                    {String(results.find(r => String(r.source || 'Unknown').trim().toLowerCase() === sellerFilter)?.source || sellerFilter)} only ×
+                  </button>
+                )}
               </div>
-              {sortedResults().map((r, i) => (
-                <div key={i} style={styles.result}>
-                  {r.thumbnail ? <img src={r.thumbnail} style={styles.thumb} alt="" /> : <div style={styles.thumbPlaceholder}>no image</div>}
-                  <div>
-                    <div style={styles.title}>{r.title}</div>
-                    <div style={styles.source}>{r.source}</div>
-                    {r.catalog?.addisonPart && <span style={styles.badge}>Part #{r.catalog.addisonPart}</span>}
-                    {r.catalog?.manufacturerPart && <span style={styles.badge}>Mfg {r.catalog.manufacturerPart}</span>}
-                    <span style={styles.badge}>{r.condition}</span>
-                  </div>
-                  <div>
-                    <div style={styles.price}>{r.catalog?.priceLabel || (r.price > 0 ? '$' + r.price.toFixed(2) : 'Catalog')}</div>
-                    <div style={styles.ship}>{r.shipping > 0 ? '+ $' + r.shipping.toFixed(2) + ' ship' : r.via === 'catalog' ? 'Saved source' : 'Free ship'}</div>
-                    <a href={r.link} target="_blank" rel="noreferrer" style={styles.viewBtn}>View ↗</a>
-                  </div>
+              <RefineBar
+                api={API}
+                enabled={!!refineStatus.enabled}
+                model={refineStatus.model}
+                query={query} partNumber={partNumber} manufacturer={manufacturer} condition={condition}
+                results={results}
+                refine={refine} setRefine={setRefine}
+                onSearch={(q) => runSearch(null, q)}
+              />
+              {/* Results on the left, the compare rail on the right. The rail is a one-line pill until
+                  opened (CompareRail.jsx), so by default it takes one row and no width. */}
+              <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+                <div style={{ flex: '1 1 480px', minWidth: 0 }}>
+                  {(() => {
+                    const rows = sortedResults();
+                    const judged = !!refine.result;
+                    const shown = judged && !refine.showUnrelated ? rows.filter(r => refine.byId[String(r.id)]?.match !== 'unrelated') : rows;
+                    const hidden = rows.length - shown.length;
+                    const renderRow = (r, i) => (
+                      <div key={r.id ?? i} style={{ ...styles.result, ...(refine.byId[String(r.id)]?.match === 'unrelated' ? { opacity: 0.6 } : {}) }}>
+                        {r.thumbnail ? <img src={r.thumbnail} style={styles.thumb} alt="" /> : <div style={styles.thumbPlaceholder}>no image</div>}
+                        <div>
+                          <div style={styles.title}>{r.title}</div>
+                          <div style={styles.source}>{r.source}</div>
+                          <MatchChip verdict={refine.byId[String(r.id)]} />
+                          {r.catalog?.addisonPart && <span style={styles.badge}>Part #{r.catalog.addisonPart}</span>}
+                          {r.catalog?.manufacturerPart && <span style={styles.badge}>Mfg {r.catalog.manufacturerPart}</span>}
+                          <span style={styles.badge}>{r.condition}</span>
+                        </div>
+                        <div>
+                          <div style={styles.price}>{r.catalog?.priceLabel || (r.price > 0 ? '$' + r.price.toFixed(2) : 'Catalog')}</div>
+                          <div style={styles.ship}>{r.shipping > 0 ? '+ $' + r.shipping.toFixed(2) + ' ship' : r.via === 'catalog' ? 'Saved source' : 'Free ship'}</div>
+                          <a href={r.link} target="_blank" rel="noreferrer" style={styles.viewBtn}>View ↗</a>
+                        </div>
+                      </div>
+                    );
+                    return (
+                      <>
+                        {shown.map(renderRow)}
+                        {shown.length === 0 && rows.length > 0 && (
+                          <div style={styles.empty}>Claude judged every listing here unrelated to your search.</div>
+                        )}
+                        {judged && hidden > 0 && (
+                          <button type="button" onClick={() => setRefine(x => ({ ...x, showUnrelated: true }))} style={{ ...styles.viewBtn, width: '100%', padding: 10, color: '#666' }}>
+                            Show {hidden} listing{hidden === 1 ? '' : 's'} Claude marked unrelated
+                          </button>
+                        )}
+                        {judged && refine.showUnrelated && rows.some(r => refine.byId[String(r.id)]?.match === 'unrelated') && (
+                          <button type="button" onClick={() => setRefine(x => ({ ...x, showUnrelated: false }))} style={{ ...styles.viewBtn, width: '100%', padding: 10, color: '#666' }}>
+                            Hide the unrelated listings again
+                          </button>
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
-              ))}
+                <CompareRail
+                  api={API}
+                  // Once Claude has judged the listings, the comparison is over the part — not over
+                  // every stranger that shared a word with it (the $11 wall button is not the market low).
+                  results={refine.result ? results.filter(r => refine.byId[String(r.id)]?.match !== 'unrelated') : results}
+                  query={[manufacturer, query, partNumber].filter(Boolean).join(' ')}
+                  sellerFilter={sellerFilter}
+                  onSellerFilter={setSellerFilter}
+                  onSearch={(q, where) => { if (where === 'pricing') { setPcQuery(q); setActiveTab('pricing'); runCostLookup(null, q); } else runSearch(null, q); }}
+                />
+              </div>
             </>
           )}
         </>
