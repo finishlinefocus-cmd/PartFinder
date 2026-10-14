@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import fetch from 'node-fetch';
 import { existsSync, readFileSync, writeFileSync } from 'fs';
+import { refineResults, refineStatus } from './refine.js';
 
 dotenv.config();
 
@@ -2369,6 +2370,28 @@ app.get('/api/cost', async (req, res) => {
     res.json(await searchCosts(req.query.q));
   } catch (err) {
     res.status(500).json({ error: err.message, items: [] });
+  }
+});
+
+// "Refine with Claude" — on-demand only (it costs tokens), off until a key is set. See refine.js.
+app.get('/api/refine/status', (req, res) => {
+  res.json(refineStatus());
+});
+
+app.post('/api/refine', async (req, res) => {
+  try {
+    const body = req.body || {};
+    res.json(await refineResults({
+      query: String(body.query || ''),
+      partNumber: String(body.partNumber || ''),
+      manufacturer: String(body.manufacturer || ''),
+      condition: String(body.condition || 'Any'),
+      results: Array.isArray(body.results) ? body.results : [],
+    }));
+  } catch (err) {
+    const status = err.status || 500;
+    if (status >= 500) console.error('Refine error:', err.message);
+    res.status(status).json({ error: err.message });
   }
 });
 
