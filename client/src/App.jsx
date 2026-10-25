@@ -4,8 +4,17 @@ import * as XLSX from 'xlsx';
 // API calls follow the page's base: '/api' when Vite serves the client on its own (dev), '/pf/api' when
 // Nexus serves the built client at /pf/ and proxies that prefix to this API (2026-10-13).
 const API = (import.meta.env.BASE_URL || '/').replace(/\/$/, '') + '/api';
+
+// Demand: this server's /api/trends/:term, which asks Nexus (Nexus owns the Trends cache and spend).
+const loadDemand = async (term, title, { cachedOnly }) => {
+  const qs = new URLSearchParams({ title: title || '', ...(cachedOnly ? { cachedOnly: '1' } : {}) });
+  const r = await fetch(API + '/trends/' + encodeURIComponent(term) + '?' + qs);
+  return r.json();
+};
 import CompareRail from './CompareRail.jsx';
 import RefineBar, { MatchChip } from './RefineBar.jsx';
+// The same file as Nexus's src/DemandPanel.tsx — keep the two byte-identical (2026-10-25).
+import DemandPanel from './DemandPanel.tsx';
 
 // Catalog category names follow a "<COMPANY> <TYPE>" pattern (e.g. "BESAM CONTROLS",
 // "DORMA PARTS", "HORTON OPER/MTR", "STANLEY NEW"). Split a category into the company
@@ -64,6 +73,8 @@ export default function App() {
   const [manufacturer, setManufacturer] = useState('');
   const [condition, setCondition] = useState('Any');
   const [results, setResults] = useState([]);
+  // What the last price search actually asked (the boxes keep changing as the next one is typed) — the Demand panel's term.
+  const [searchedQ, setSearchedQ] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [searched, setSearched] = useState(false);
@@ -137,6 +148,7 @@ export default function App() {
     if (!q) return;
     setActiveTab('search');
     setQuery(q);
+    setSearchedQ(q);
     setLoading(true); setError(''); setSearched(true);
     fetch(API + '/search?q=' + encodeURIComponent(q) + '&condition=Any')
       .then(res => res.json())
@@ -362,6 +374,7 @@ export default function App() {
     setLoading(true);
     setError('');
     setSearched(true);
+    setSearchedQ(q);
     setSellerFilter(null);
     setRefine({ result: null, byId: {}, error: '', showUnrelated: false });
     try {
@@ -1076,6 +1089,14 @@ export default function App() {
                   onSellerFilter={setSellerFilter}
                   onSearch={(q, where) => { if (where === 'pricing') { setPcQuery(q); setActiveTab('pricing'); runCostLookup(null, q); } else runSearch(null, q); }}
                 />
+                {/* Demand beside the prices: Google search interest for what was searched (DemandPanel.tsx). A saved
+                    answer shows at once; otherwise a button — on the shared SerpApi Free plan an automatic lookup on
+                    every price search would spend Search Trends' whole month in days. auto={true} once the plan is bigger. */}
+                {searchedQ && (
+                  <div style={{ flex: '0 1 280px', minWidth: 240 }}>
+                    <DemandPanel term={searchedQ} title={results[0]?.title || ''} load={loadDemand} auto={false} onSearch={(q) => runSearch(null, q)} />
+                  </div>
+                )}
               </div>
             </>
           )}

@@ -2395,6 +2395,34 @@ app.post('/api/refine', async (req, res) => {
   }
 });
 
+// ── Demand: a part's Google search interest, from NEXUS (2026-10-25) ───────────────────────────────────
+// Nexus owns the Google Trends cache and what is spent on the shared SerpApi key (its src/trendsServer.ts),
+// so PartFinder never calls SerpApi Trends itself: this asks Nexus's /api/partfinder/trends-demand with the
+// token Nexus's keeper hands this process (NEXUS_TRENDS_URL + NEXUS_TRENDS_TOKEN; either can be set in .env
+// for a PartFinder that Nexus did not start). "No data", "not set up" and "paused" all come back as a 200
+// with ok:false and a sentence — the Demand panel shows words, never an error.
+const NEXUS_TRENDS_URL = String(process.env.NEXUS_TRENDS_URL || 'http://127.0.0.1:4800').replace(/\/+$/, '');
+app.get('/api/trends/:term', async (req, res) => {
+  const term = String(req.params.term || '').trim().slice(0, 100);
+  const title = String(req.query.title || '').slice(0, 300);
+  const cachedOnly = String(req.query.cachedOnly || '') === '1';
+  const token = String(process.env.NEXUS_TRENDS_TOKEN || '').trim();
+  if (!term) return res.json({ ok: false, noData: true, message: 'No search term.' });
+  if (!token) return res.json({ ok: false, notConfigured: true, message: 'Search demand is not connected to Nexus on this PartFinder.' });
+  try {
+    const qs = new URLSearchParams({ term, title, ...(cachedOnly ? { cachedOnly: '1' } : {}) });
+    const r = await fetch(`${NEXUS_TRENDS_URL}/api/partfinder/trends-demand?${qs}`, {
+      headers: { 'x-nexus-token': token, accept: 'application/json' },
+      signal: AbortSignal.timeout(45_000),
+    });
+    const data = await r.json().catch(() => ({}));
+    if (r.ok) return res.json(data);
+    return res.json({ ok: false, paused: !!data.paused, notConfigured: !!data.notConfigured || r.status === 401, message: r.status === 401 ? 'Nexus did not accept PartFinder\'s token — restart PartFinder from Nexus (IT › PartFinder › Restart).' : (data.error || 'Search demand is not available right now.') });
+  } catch (err) {
+    return res.json({ ok: false, message: 'Nexus did not answer for search demand right now.' });
+  }
+});
+
 app.get('/api/search', async (req, res) => {
   const { q, condition } = req.query;
 
