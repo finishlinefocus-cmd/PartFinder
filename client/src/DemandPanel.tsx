@@ -130,7 +130,7 @@ export default function DemandPanel({ term, title = '', load, onSearch, auto = t
           <>
             <Sparkline points={answer.points || []} />
             <div style={{ ...muted, display: 'flex', justifyContent: 'space-between', margin: '2px 0 8px' }}>
-              <span>12 months · US{answer.cleaned ? ` · searched as “${answer.term}”` : ''}{answer.badge ? ` · ${answer.badgeBasis === 'year' ? 'badge: vs same weeks last year' : 'badge: last 90 days vs the 90 before'}` : ''}</span>
+              <span>12 months · US{answer.cleaned ? ` · searched as “${answer.term}”, the way buyers type it` : ''}{answer.badge ? ` · ${answer.badgeBasis === 'year' ? 'badge: vs same weeks last year' : 'badge: last 90 days vs the 90 before'}` : ''}</span>
               <span>as of {new Date(answer.asOf || Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
             </div>
             {answer.sparse && (

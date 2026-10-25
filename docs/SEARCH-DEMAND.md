@@ -19,6 +19,14 @@ The numbers come from Google Trends through **Nexus** (Nexus owns the cache and 
 All of it is Google's **relative interest** (0–100 against the busiest week of the last five years in the
 US), never a count of searches.
 
+## What it searches for
+
+Not the part number — none of our best sellers' numbers have Google data. Nexus asks for the KIND of part,
+the way a buyer types it: felt and brush seals → "weather stripping", sweeps → "door sweep", Quikrete →
+"concrete crack repair", prox cards and key tags → "key fob", Stanley wheels, guides, operators and sensors
+→ "automatic door". The panel says "searched as …". Many parts share one kind, so they share one saved
+answer.
+
 ## What it costs
 
 One five-year look-up plus one related-searches look-up per part, then saved for 24 hours. The SerpApi key
