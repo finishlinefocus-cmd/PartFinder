@@ -2413,7 +2413,8 @@ app.get('/api/trends/:term', async (req, res) => {
     const qs = new URLSearchParams({ term, title, ...(cachedOnly ? { cachedOnly: '1' } : {}) });
     const r = await fetch(`${NEXUS_TRENDS_URL}/api/partfinder/trends-demand?${qs}`, {
       headers: { 'x-nexus-token': token, accept: 'application/json' },
-      signal: AbortSignal.timeout(45_000),
+      // Nexus may ask SerpApi twice (interest, then related searches), up to 60 s each.
+      signal: AbortSignal.timeout(150_000),
     });
     const data = await r.json().catch(() => ({}));
     if (r.ok) return res.json(data);
