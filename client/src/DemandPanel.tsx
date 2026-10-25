@@ -27,7 +27,7 @@ export type DemandAnswer = {
   ok: boolean;
   term?: string; asked?: string; cleaned?: boolean;
   points?: Array<{ date: string; value: number; partial?: boolean }>;
-  badge?: 'Rising' | 'Steady' | 'Falling' | null; changePct?: number | null;
+  badge?: 'Rising' | 'Steady' | 'Falling' | null; changePct?: number | null; badgeBasis?: 'year' | 'quarter' | null; sparse?: boolean;
   rising?: Array<{ query: string; label: string }>; asOf?: string; note?: string;
   busyMonths?: string | null; quietMonths?: string | null; seasonYears?: number | null;
   longRun?: 'Growing' | 'Flat' | 'Shrinking' | null; longRunPct?: number | null; longRunFrom?: number | null; longRunTo?: number | null;
@@ -39,8 +39,8 @@ export type DemandLoader = (term: string, title: string, opts: { cachedOnly: boo
 const HINT = "Google's relative interest, 0–100 against the busiest week of the last five years in the US — not a count of searches.";
 /** What each line is FOR, in the words of the people using it. Shown under "What is this for?". */
 export const DEMAND_USES: ReadonlyArray<{ title: string; text: string }> = [
-  { title: 'Rising / Steady / Falling', text: 'Are more people searching for this now than three months ago? Rising is a reason to keep it in stock.' },
-  { title: 'Busy months', text: 'When people search for it most, averaged over five years. Order stock and run ads a few weeks before the busy months.' },
+  { title: 'Rising / Steady / Falling', text: 'Are more people searching for this now than in the same weeks last year? Rising is a reason to keep it in stock.' },
+  { title: 'Busy months', text: 'When people search for it most, in most of the last five years (one odd year does not count). Order stock and run ads a few weeks before the busy months.' },
   { title: 'Over 5 years', text: 'Is it gaining or fading over the years, not just this season. Check it before a big purchase or a large stock order.' },
   { title: 'Rising searches', text: 'The words buyers are typing more and more. Use them in part titles, the catalog and ads. Click one to look it up.' },
 ];
@@ -130,9 +130,12 @@ export default function DemandPanel({ term, title = '', load, onSearch, auto = t
           <>
             <Sparkline points={answer.points || []} />
             <div style={{ ...muted, display: 'flex', justifyContent: 'space-between', margin: '2px 0 8px' }}>
-              <span>12 months · US{answer.cleaned ? ` · searched as “${answer.term}”` : ''}</span>
+              <span>12 months · US{answer.cleaned ? ` · searched as “${answer.term}”` : ''}{answer.badge ? ` · ${answer.badgeBasis === 'year' ? 'badge: vs same weeks last year' : 'badge: last 90 days vs the 90 before'}` : ''}</span>
               <span>as of {new Date(answer.asOf || Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
             </div>
+            {answer.sparse && (
+              <p style={{ ...muted, margin: '0 0 8px', color: '#92400e' }}>Too few Google searches for this to read a trend or a season — most weeks are below Google's threshold.</p>
+            )}
             {(answer.busyMonths || answer.longRun) && (
               <div style={{ margin: '0 0 8px', fontSize: 12 }}>
                 {answer.busyMonths ? (
