@@ -9,7 +9,11 @@
  * Nexus owns the cache and the spend either way (src/trendsServer.ts); nothing here calls Google.
  *
  * What it shows: 12 months of US interest as a sparkline, Rising / Steady / Falling (the last 90 days
- * against the 90 before, ±15 %), and the top 3 rising related searches. A part number Google has never
+ * against the 90 before, ±15 %), the busy and quiet months (the same month averaged over five years), the
+ * five-year direction (the last 12 months against the first 12 — Growing / Flat / Shrinking, ±20 %), and
+ * the top 3 rising related searches. All of it from ONE five-year look-up plus the related one. "What is
+ * this for?" says in plain words what each line helps somebody decide (Sterling 2026-10-25: "it's got to
+ * be understood by the people that are using it"). A part number Google has never
  * heard of is retried as the words of the part's title, and "no search trend data" is an answer — this
  * panel never shows an error.
  *
@@ -23,14 +27,24 @@ export type DemandAnswer = {
   ok: boolean;
   term?: string; asked?: string; cleaned?: boolean;
   points?: Array<{ date: string; value: number; partial?: boolean }>;
-  badge?: 'Rising' | 'Steady' | 'Falling' | null; changePct?: number | null;
+  badge?: 'Rising' | 'Steady' | 'Falling' | null; changePct?: number | null; badgeBasis?: 'year' | 'quarter' | null; sparse?: boolean;
   rising?: Array<{ query: string; label: string }>; asOf?: string; note?: string;
+  busyMonths?: string | null; quietMonths?: string | null; seasonYears?: number | null;
+  longRun?: 'Growing' | 'Flat' | 'Shrinking' | null; longRunPct?: number | null; longRunFrom?: number | null; longRunTo?: number | null;
   noData?: boolean; notCached?: boolean; paused?: boolean; notConfigured?: boolean; message?: string; error?: string;
 };
 
 export type DemandLoader = (term: string, title: string, opts: { cachedOnly: boolean }) => Promise<DemandAnswer>;
 
-const HINT = "Google's relative interest, 0–100 against the busiest week of the last 12 months in the US — not a count of searches.";
+const HINT = "Google's relative interest, 0–100 against the busiest week of the last five years in the US — not a count of searches.";
+/** What each line is FOR, in the words of the people using it. Shown under "What is this for?". */
+export const DEMAND_USES: ReadonlyArray<{ title: string; text: string }> = [
+  { title: 'Rising / Steady / Falling', text: 'Are more people searching for this now than in the same weeks last year? Rising is a reason to keep it in stock.' },
+  { title: 'Busy months', text: 'When people search for it most, in most of the last five years (one odd year does not count). Order stock and run ads a few weeks before the busy months.' },
+  { title: 'Over 5 years', text: 'Is it gaining or fading over the years, not just this season. Check it before a big purchase or a large stock order.' },
+  { title: 'Rising searches', text: 'The words buyers are typing more and more. Use them in part titles, the catalog and ads. Click one to look it up.' },
+];
+const LONG: Record<string, { fg: string }> = { Growing: { fg: '#15803d' }, Flat: { fg: '#3f3f46' }, Shrinking: { fg: '#b91c1c' } };
 const BADGE: Record<string, { fg: string; bg: string }> = {
   Rising: { fg: '#15803d', bg: '#dcfce7' },
   Steady: { fg: '#3f3f46', bg: '#f4f4f5' },
@@ -66,6 +80,7 @@ export default function DemandPanel({ term, title = '', load, onSearch, auto = t
   const [answer, setAnswer] = useState<DemandAnswer | null>(null);
   const [loading, setLoading] = useState(false);
   const [showHint, setShowHint] = useState(false);
+  const [showUses, setShowUses] = useState(false);
   useEffect(() => { setAsked({ term, title }); }, [term, title]);
 
   const run = async (t: string, ti: string, cachedOnly: boolean) => {
@@ -97,6 +112,17 @@ export default function DemandPanel({ term, title = '', load, onSearch, auto = t
         )}
       </div>
       {showHint && <p style={{ ...muted, margin: '0 0 8px' }}>{HINT}</p>}
+      <button type="button" style={{ ...linkBtn, ...muted, color: '#1d4ed8', marginBottom: 6 }} onClick={() => setShowUses(v => !v)}>
+        {showUses ? 'Hide' : 'What is this for?'}
+      </button>
+      {showUses && (
+        <div style={{ background: '#eff6ff', borderRadius: 8, padding: '6px 8px', margin: '0 0 8px' }}>
+          <p style={{ margin: '0 0 4px', fontSize: 12, color: '#1e3a8a' }}>How many people search Google for this part, so you can stock it and advertise it at the right time.</p>
+          {DEMAND_USES.map(u => (
+            <p key={u.title} style={{ margin: '2px 0', fontSize: 12, color: '#1e3a8a' }}><strong>{u.title}:</strong> {u.text}</p>
+          ))}
+        </div>
+      )}
 
       {loading ? <p style={{ ...muted, margin: 0 }}>Checking Google Trends…</p>
         : !answer ? null
@@ -104,9 +130,25 @@ export default function DemandPanel({ term, title = '', load, onSearch, auto = t
           <>
             <Sparkline points={answer.points || []} />
             <div style={{ ...muted, display: 'flex', justifyContent: 'space-between', margin: '2px 0 8px' }}>
-              <span>12 months · US{answer.cleaned ? ` · searched as “${answer.term}”` : ''}</span>
+              <span>12 months · US{answer.cleaned ? ` · searched as “${answer.term}”` : ''}{answer.badge ? ` · ${answer.badgeBasis === 'year' ? 'badge: vs same weeks last year' : 'badge: last 90 days vs the 90 before'}` : ''}</span>
               <span>as of {new Date(answer.asOf || Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
             </div>
+            {answer.sparse && (
+              <p style={{ ...muted, margin: '0 0 8px', color: '#92400e' }}>Too few Google searches for this to read a trend or a season — most weeks are below Google's threshold.</p>
+            )}
+            {(answer.busyMonths || answer.longRun) && (
+              <div style={{ margin: '0 0 8px', fontSize: 12 }}>
+                {answer.busyMonths ? (
+                  <div style={{ padding: '1px 0' }}><span style={muted}>Busy months: </span><strong>{answer.busyMonths}</strong>
+                    {answer.quietMonths ? <span style={muted}> · quiet {answer.quietMonths}</span> : null}</div>
+                ) : answer.seasonYears ? <div style={{ ...muted, padding: '1px 0' }}>No busy season — about the same all year.</div> : null}
+                {answer.longRun && (
+                  <div style={{ padding: '1px 0' }}><span style={muted}>Over 5 years: </span>
+                    <strong style={{ color: LONG[answer.longRun].fg }}>{answer.longRun}{answer.longRunPct != null ? ` ${answer.longRunPct > 0 ? '+' : ''}${answer.longRunPct}%` : ''}</strong>
+                    {answer.longRunFrom && answer.longRunTo ? <span style={muted}> ({answer.longRunFrom} → {answer.longRunTo})</span> : null}</div>
+                )}
+              </div>
+            )}
             {(answer.rising || []).length > 0 ? (
               <div>
                 <div style={{ ...muted, fontWeight: 700, marginBottom: 3 }}>Rising searches</div>
