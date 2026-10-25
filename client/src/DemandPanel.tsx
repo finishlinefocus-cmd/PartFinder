@@ -169,7 +169,7 @@ export default function DemandPanel({ term, title = '', load, onSearch, auto = t
           </button>
         ) : (
           <p style={{ ...muted, margin: 0, ...(answer.paused ? { color: '#92400e' } : {}) }}>
-            {answer.noData ? 'No search trend data for this part.'
+            {answer.noData ? 'No search trend data for this part. Google cannot measure most automatic-door, access-control and brand parts — too few searches, or drowned out by garage-door and car-key searches.'
               : answer.notConfigured ? 'Search demand is not set up yet.'
               : answer.message || answer.error || 'Search demand is not available right now.'}
           </p>

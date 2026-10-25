@@ -22,10 +22,17 @@ US), never a count of searches.
 ## What it searches for
 
 Not the part number — none of our best sellers' numbers have Google data. Nexus asks for the KIND of part,
-the way a buyer types it: felt and brush seals → "weather stripping", sweeps → "door sweep", Quikrete →
-"concrete crack repair", prox cards and key tags → "key fob", Stanley wheels, guides, operators and sensors
-→ "automatic door". The panel says "searched as …". Many parts share one kind, so they share one saved
-answer.
+the way a buyer types it, but only for kinds Google really measures: felt and brush seals → "weather
+stripping", sweeps → "door sweep", Quikrete → "concrete crack repair". The panel says "searched as …".
+
+## What Google cannot measure for us (checked 2026-10-25)
+
+- "automatic door", "automatic sliding door" — the searches are chicken-coop doors, garage doors, dog doors.
+- "key fob" — car keys and batteries, not HID prox tags.
+- "electric strike" — e-bikes and fishing lures. "key switch" — keyboards.
+- Brand names (Stanley, Horton, NABCO, BEA, Optex), "prox card", "dock seal", door sensors — too few searches.
+
+Parts of those kinds show "No search trend data". That is the true answer, not a fault.
 
 ## What it costs
 
@@ -48,8 +55,8 @@ almost nobody googles is bought by people who already know where to get it.
 
 ## Tested on real stock, 2026-10-25
 
-Weather stripping (our 411624 felt, brush seals): busy Oct–Jan, quiet Mar–Apr. Concrete crack repair
-(Quikrete 8650): busy Jul–Sep, quiet Nov–Jan. Automatic door: no season, steady all year. Door sweep:
+Weather stripping (our 411624 felt, brush seals): busy Nov–Jan, quiet Apr. Concrete crack repair
+(Quikrete 8650): busy Jun–Sep, quiet Nov–Jan. Door sweep:
 buyers type "door bottom", "brush door sweep", "door sweep seal" — our titles say "NYLON BRUSH DOOR SWEEP".
 In spring 2026 "automatic door", "electric strike" and "door sweep" all quadrupled together for about ten
 weeks and fell back — not demand — which is why the rules use medians.
