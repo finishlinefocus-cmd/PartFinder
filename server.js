@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import fetch from 'node-fetch';
 import { existsSync, readFileSync, writeFileSync, renameSync } from 'fs';
+import { partTokens, mentionsPart, isWebSource, byPrice } from './relevance.js';
 
 dotenv.config();
 
@@ -2639,27 +2640,25 @@ app.get('/api/search', async (req, res) => {
     else if (r.status === 'rejected') console.error('Search source error:', r.reason?.message || r.reason);
   }
 
-  // Relevance guard: when the query carries a part-number-ish token
-  // (e.g. "stanley 314263"), Google/Apify happily match the brand word alone
-  // and bury the real part under Stanley cups. Web-source results must
-  // mention the part token; catalog/BigQuery rows already matched upstream.
-  const partTokens = (String(q).match(/[A-Za-z0-9-]*\d{4,}[A-Za-z0-9-]*/g) || [])
-    .map((t) => t.toLowerCase().replace(/[^a-z0-9]/g, ''))
-    .filter((t) => t.length >= 4);
-  if (partTokens.length) {
-    const normalize = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-    const isWebSource = (r) => r.via === 'apify' || r.via === 'serpapi';
-    const mentionsPart = (r) => {
-      const haystack = normalize(`${r.title} ${r.partNumber || ''} ${r.link || ''}`);
-      return partTokens.some((token) => haystack.includes(token));
-    };
-    const guarded = results.filter((r) => !isWebSource(r) || mentionsPart(r));
+  // Relevance guard: when the query names a part, Google/Apify happily match the brand word alone
+  // and bury the real part under Stanley cups. Web-source results must mention the part; catalog
+  // and BigQuery rows already matched upstream. The rules are in ./relevance.js — see the note
+  // there for why the old four-digit test left most of this office's part numbers unguarded
+  // (Shaun Farrell 2026-10-29: "pulling up completely nothing relates to the part number").
+  const tokens = partTokens(q);
+  let guardedOut = 0;
+  if (tokens.length) {
+    const kept = results.filter((r) => !isWebSource(r) || mentionsPart(tokens, `${r.title} ${r.partNumber || ''} ${r.link || ''}`));
+    guardedOut = results.length - kept.length;
     results.length = 0;
-    results.push(...guarded);
+    results.push(...kept);
   }
 
-  results.sort((a, b) => a.price - b.price);
-  const payload = { results, count: results.length, query: q };
+  results.sort(byPrice);
+  // `guarded` says what the guard did, so a thin answer can be read as "the web had nothing about
+  // this part" rather than as a broken search. `partTokens: []` is the honest "nothing in this
+  // query looked like a part number, so nothing was filtered".
+  const payload = { results, count: results.length, query: q, guarded: { partTokens: tokens, droppedWebResults: guardedOut } };
   // Only cache a "good" (non-empty) response — never cache an empty result that happened because the
   // external sources timed out/errored, or we'd serve that emptiness for the whole TTL.
   if (results.length) searchCacheSet(cacheKey, payload);

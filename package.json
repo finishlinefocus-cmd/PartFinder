@@ -12,6 +12,7 @@
     "autostart:install": "node scripts/autostart.mjs install",
     "autostart:uninstall": "node scripts/autostart.mjs uninstall",
     "autostart:status": "node scripts/autostart.mjs status",
+    "test:relevance": "node scripts/relevance.test.mjs",
     "prices:normalize": "python3 scripts/price-lists/normalize.py",
     "prices:import": "node scripts/price-lists/import.mjs",
     "prices:volusion": "python3 scripts/price-lists/volusion-vendor-rules.py",
