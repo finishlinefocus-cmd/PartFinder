@@ -4,6 +4,8 @@ import dotenv from 'dotenv';
 import fetch from 'node-fetch';
 import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { refineResults, refineStatus } from './refine.js';
+// One copy of the part-number rules, read by this API and by the page (client/src/partMatch.js).
+import { rankCatalog, judgeListing, byBestMatch, partTokens, partWords, wordTokens } from './client/src/partMatch.js';
 
 dotenv.config();
 
@@ -2433,8 +2435,10 @@ app.get('/api/search', async (req, res) => {
 
   const results = [];
 
+  // RANKED BEFORE IT IS CUT (2026-10-29): the catalogue used to be one substring search kept to its first
+  // 50 hits in file order, so "1601" returned CRL's 20061601 screw and KP1601 paint — see partMatch.js.
   try {
-    const catalogResults = filterCatalogItems(readCatalogStore().items, String(q)).slice(0, 50);
+    const catalogResults = rankCatalog(readCatalogStore().items, String(q), 50).map(h => h.item);
     results.push(...catalogResults.map((item, index) => ({
       id: `catalog-${index}-${item.id}`,
       title: item.description || item.addisonPart,
@@ -2499,8 +2503,14 @@ app.get('/api/search', async (req, res) => {
     console.error('SerpApi error:', err.message);
   }
 
-  results.sort((a, b) => a.price - b.price);
-  res.json({ results, count: results.length, query: q });
+  // BEST MATCH FIRST, NOT CHEAPEST FIRST (2026-10-29; Shaun: "completely nothing relates to the part number
+  // i put in"). Every listing is judged against the part number(s) in the query; price only orders listings
+  // that match the part equally well, so Google Shopping's 5-dollar guess no longer leads the page.
+  const tokens = partTokens(String(q)), words = wordTokens(String(q));
+  for (const r of results) Object.assign(r, judgeListing(r, String(q), tokens, words));
+  results.sort(byBestMatch);
+  const related = tokens.length ? results.filter(r => r.rank > 0).length : results.length;
+  res.json({ results, count: results.length, query: q, partNumbers: partWords(String(q)), related });
 });
 
 const partfinderServer = app.listen(PORT, '0.0.0.0', () => {

@@ -13,6 +13,8 @@ const loadDemand = async (term, title, { cachedOnly }) => {
 };
 import CompareRail from './CompareRail.jsx';
 import RefineBar, { MatchChip } from './RefineBar.jsx';
+// Does a listing name the part that was searched? The API judges each one with the same rules (2026-10-29).
+import { byBestMatch, matchLabel } from './partMatch.js';
 // The same file as Nexus's src/DemandPanel.tsx — keep the two byte-identical (2026-10-25).
 import DemandPanel from './DemandPanel.tsx';
 
@@ -78,7 +80,12 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [searched, setSearched] = useState(false);
-  const [sortBy, setSortBy] = useState('price');
+  // Best match first (2026-10-29): by price alone the cheapest stranger led the page — a 5-cent screw for "1601".
+  const [sortBy, setSortBy] = useState('best');
+  // What the API said about the last search: the part numbers it read from it, and how many listings name one.
+  const [searchMeta, setSearchMeta] = useState({ partNumbers: [], related: 0 });
+  // Listings that never mention the part number are folded away until asked for.
+  const [showUnmatched, setShowUnmatched] = useState(false);
   // Compare rail: a seller key (lower-cased source) narrows the list, null shows everyone.
   const [sellerFilter, setSellerFilter] = useState(null);
   // Refine with Claude: hidden until /api/refine/status says a key is set.
@@ -152,7 +159,7 @@ export default function App() {
     setLoading(true); setError(''); setSearched(true);
     fetch(API + '/search?q=' + encodeURIComponent(q) + '&condition=Any')
       .then(res => res.json())
-      .then(data => setResults(data.results || []))
+      .then(data => { setResults(data.results || []); setSearchMeta({ partNumbers: data.partNumbers || [], related: Number(data.related) || 0 }); setShowUnmatched(false); })
       .catch(err => { setError('Search failed: ' + err.message); setResults([]); })
       .finally(() => setLoading(false));
   }, []);
@@ -381,6 +388,8 @@ export default function App() {
       const res = await fetch(API + '/search?q=' + encodeURIComponent(q) + '&condition=' + condition);
       const data = await res.json();
       setResults(data.results || []);
+      setSearchMeta({ partNumbers: data.partNumbers || [], related: Number(data.related) || 0 });
+      setShowUnmatched(false);
     } catch (err) {
       setError('Search failed: ' + err.message);
       setResults([]);
@@ -500,6 +509,7 @@ export default function App() {
   function sortedResults() {
     let copy = [...results];
     if (sellerFilter) copy = copy.filter(r => String(r.source || 'Unknown').trim().toLowerCase() === sellerFilter);
+    if (sortBy === 'best') return copy.sort(byBestMatch);
     if (sortBy === 'price') return copy.sort((a, b) => a.price - b.price);
     if (sortBy === 'total') return copy.sort((a, b) => (a.price + a.shipping) - (b.price + b.shipping));
     if (sortBy === 'source') return copy.sort((a, b) => a.source.localeCompare(b.source));
@@ -1014,6 +1024,7 @@ export default function App() {
                 <span style={{ fontSize: 12, color: '#666' }}>
                   {sellerFilter ? `${sortedResults().length} of ${results.length}` : results.length} results — Sort:
                 </span>
+                <button style={sortBtnStyle(sortBy === 'best')} onClick={() => setSortBy('best')} title="Listings that name the part number first; price orders listings that match equally well">Best match</button>
                 <button style={sortBtnStyle(sortBy === 'price')} onClick={() => setSortBy('price')}>Price</button>
                 <button style={sortBtnStyle(sortBy === 'total')} onClick={() => setSortBy('total')}>Total w/ shipping</button>
                 <button style={sortBtnStyle(sortBy === 'source')} onClick={() => setSortBy('source')}>Source</button>
@@ -1037,7 +1048,11 @@ export default function App() {
               <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start', flexWrap: 'wrap' }}>
                 <div style={{ flex: '1 1 480px', minWidth: 0 }}>
                   {(() => {
-                    const rows = sortedResults();
+                    const pns = searchMeta.partNumbers || [];
+                    const allRows = sortedResults();
+                    // A part-number search folds away what never mentions the number (2026-10-29) — still one click away.
+                    const unmatched = pns.length ? allRows.filter(r => r.match === 'none') : [];
+                    const rows = pns.length && !showUnmatched ? allRows.filter(r => r.match !== 'none') : allRows;
                     const judged = !!refine.result;
                     const shown = judged && !refine.showUnrelated ? rows.filter(r => refine.byId[String(r.id)]?.match !== 'unrelated') : rows;
                     const hidden = rows.length - shown.length;
@@ -1048,6 +1063,7 @@ export default function App() {
                           <div style={styles.title}>{r.title}</div>
                           <div style={styles.source}>{r.source}</div>
                           <MatchChip verdict={refine.byId[String(r.id)]} />
+                          {matchLabel(r, pns) && <span style={{ ...styles.badge, ...(r.match === 'part' || r.match === 'exact' ? { background: '#E3F5E9', color: '#1E7B3A' } : r.match === 'none' ? { background: '#FDECEC', color: '#A32020' } : { background: '#FFF4D6', color: '#8A5A00' }) }}>{matchLabel(r, pns)}</span>}
                           {r.catalog?.addisonPart && <span style={styles.badge}>Part #{r.catalog.addisonPart}</span>}
                           {r.catalog?.manufacturerPart && <span style={styles.badge}>Mfg {r.catalog.manufacturerPart}</span>}
                           <span style={styles.badge}>{r.condition}</span>
@@ -1061,7 +1077,15 @@ export default function App() {
                     );
                     return (
                       <>
+                        {pns.length > 0 && rows.length === 0 && (
+                          <div style={styles.empty}>Nothing found mentions {pns.join(' or ')}. {unmatched.length} listing{unmatched.length === 1 ? '' : 's'} came back that only share words with it — check the number, or show them below.</div>
+                        )}
                         {shown.map(renderRow)}
+                        {unmatched.length > 0 && (
+                          <button type="button" onClick={() => setShowUnmatched(v => !v)} style={{ ...styles.viewBtn, width: '100%', padding: 10, color: '#666' }}>
+                            {showUnmatched ? `Hide the ${unmatched.length} listing${unmatched.length === 1 ? '' : 's'} that do not mention ${pns[0]}` : `Show ${unmatched.length} listing${unmatched.length === 1 ? '' : 's'} that do not mention ${pns[0]}`}
+                          </button>
+                        )}
                         {shown.length === 0 && rows.length > 0 && (
                           <div style={styles.empty}>Claude judged every listing here unrelated to your search.</div>
                         )}
@@ -1083,7 +1107,7 @@ export default function App() {
                   api={API}
                   // Once Claude has judged the listings, the comparison is over the part — not over
                   // every stranger that shared a word with it (the $11 wall button is not the market low).
-                  results={refine.result ? results.filter(r => refine.byId[String(r.id)]?.match !== 'unrelated') : results}
+                  results={(refine.result ? results.filter(r => refine.byId[String(r.id)]?.match !== 'unrelated') : results).filter(r => !(searchMeta.partNumbers || []).length || r.match !== 'none')}
                   query={[manufacturer, query, partNumber].filter(Boolean).join(' ')}
                   sellerFilter={sellerFilter}
                   onSellerFilter={setSellerFilter}
