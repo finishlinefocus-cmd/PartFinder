@@ -14,7 +14,7 @@ const loadDemand = async (term, title, { cachedOnly }) => {
 import CompareRail from './CompareRail.jsx';
 import RefineBar, { MatchChip } from './RefineBar.jsx';
 // Does a listing name the part that was searched? The API judges each one with the same rules (2026-10-29).
-import { byBestMatch, matchLabel } from './partMatch.js';
+import { byBestMatch, matchLabel, inMarketLow } from './partMatch.js';
 // The same file as Nexus's src/DemandPanel.tsx — keep the two byte-identical (2026-10-25).
 import DemandPanel from './DemandPanel.tsx';
 
@@ -1107,7 +1107,9 @@ export default function App() {
                   api={API}
                   // Once Claude has judged the listings, the comparison is over the part — not over
                   // every stranger that shared a word with it (the $11 wall button is not the market low).
-                  results={(refine.result ? results.filter(r => refine.byId[String(r.id)]?.match !== 'unrelated') : results).filter(r => !(searchMeta.partNumbers || []).length || r.match !== 'none')}
+                  // With a part number searched, only listings of that same number count: a rebuilt R1601
+                  // or a prefixed KP1601 is listed on the left but is not the market (partMatch.js).
+                  results={(refine.result ? results.filter(r => refine.byId[String(r.id)]?.match !== 'unrelated') : results).filter(r => inMarketLow(r, searchMeta.partNumbers))}
                   query={[manufacturer, query, partNumber].filter(Boolean).join(' ')}
                   sellerFilter={sellerFilter}
                   onSellerFilter={setSellerFilter}
